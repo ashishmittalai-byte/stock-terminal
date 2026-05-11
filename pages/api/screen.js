@@ -80,7 +80,8 @@ async function callGemini(apiKey, model, strategy) {
 
   if (!isGemma) {
     body.system_instruction = { parts: [{ text: PROMPT }] };
-    body.tools = [{ google_search: {} }];
+    // No google_search for screener — pattern matching works from model knowledge
+    // and responds in 5-10s instead of timing out at 30s+
   }
 
   const ctrl = new AbortController();
