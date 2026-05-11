@@ -209,7 +209,7 @@ export default function Home() {
       const risk = r.currentPrice && r.stopLoss ? Math.abs(r.currentPrice - r.stopLoss) : 0;
       const reward = r.targetPrice && r.currentPrice ? Math.abs(r.targetPrice - r.currentPrice) : 0;
       const rr = risk > 0 ? (reward / risk).toFixed(1) : '-';
-      return [r.stockName, r.ticker, r.sector, r.currentPrice, r.changePercent, r.signal, r.strength, r.pattern, r.breakoutLevel, r.targetPrice, r.stopLoss, rr, `"${(r.explanation || '').replace(/"/g, "'')}"`].join(',');
+      return [r.stockName, r.ticker, r.sector, r.currentPrice, r.changePercent, r.signal, r.strength, r.pattern, r.breakoutLevel, r.targetPrice, r.stopLoss, rr, "\"" + (r.explanation || "").replace(/"/g, "") + "\""].join(",");
     });
     const csv = [headers.join(','), ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -245,7 +245,7 @@ export default function Home() {
     }
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/suggest?q=${encodeURIComponent(query.trim())}`);
+        const res = await fetch('/api/suggest?q=' + encodeURIComponent(query.trim()));
         const json = await res.json();
         setSuggestions(json.suggestions || []);
         setShowSuggestions((json.suggestions || []).length > 0);
@@ -1513,10 +1513,10 @@ export default function Home() {
                         {expandedCharts[i] && (
                           <div style={{ marginTop:8, borderRadius:8, overflow:'hidden', border:'1px solid rgba(0,0,0,0.06)' }}>
                             <iframe
-                              src={`https://s.tradingview.com/widgetembed/?frameElementId=tv_${i}&symbol=NSE%3A${encodeURIComponent(r.ticker || '')}&interval=D&hidesidebar=1&symboledit=0&saveimage=0&toolbarbg=f1f3f6&theme=light&style=1&timezone=Asia%2FKolkata&locale=en&withdateranges=0&hide_top_toolbar=0&hide_side_toolbar=1&allow_symbol_change=0`}
+                              src={'https://s.tradingview.com/widgetembed/?frameElementId=tv_' + i + '&symbol=NSE%3A' + encodeURIComponent(r.ticker || '') + '&interval=D&hidesidebar=1&symboledit=0&saveimage=0&toolbarbg=f1f3f6&theme=light&style=1&timezone=Asia%2FKolkata&locale=en&withdateranges=0&hide_top_toolbar=0&hide_side_toolbar=1&allow_symbol_change=0'}
                               style={{ width:'100%', height:300, border:'none' }}
                               loading="lazy"
-                              title={`${r.ticker} chart`}
+                              title={(r.ticker || '') + ' chart'}
                             />
                           </div>
                         )}
