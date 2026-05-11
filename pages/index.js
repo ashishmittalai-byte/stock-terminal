@@ -14,11 +14,11 @@ const QUICK_PICKS = [
 ];
 
 const VERDICT_CONFIG = {
-  'Strong Buy':  { color: '#00e676', bg: 'rgba(0,230,118,0.08)', border: 'rgba(0,230,118,0.25)', icon: '▲▲' },
-  'Buy':         { color: '#66bb6a', bg: 'rgba(102,187,106,0.08)', border: 'rgba(102,187,106,0.25)', icon: '▲' },
-  'Hold':        { color: '#ffa726', bg: 'rgba(255,167,38,0.08)', border: 'rgba(255,167,38,0.25)', icon: '◆' },
-  'Sell':        { color: '#ef5350', bg: 'rgba(239,83,80,0.08)', border: 'rgba(239,83,80,0.25)', icon: '▼' },
-  'Strong Sell': { color: '#c62828', bg: 'rgba(198,40,40,0.08)', border: 'rgba(198,40,40,0.25)', icon: '▼▼' },
+  'Strong Buy':  { color: '#15803d', bg: 'rgba(22,163,74,0.08)', border: 'rgba(22,163,74,0.25)', icon: '▲▲' },
+  'Buy':         { color: '#16a34a', bg: 'rgba(22,163,74,0.06)', border: 'rgba(22,163,74,0.2)', icon: '▲' },
+  'Hold':        { color: '#d97706', bg: 'rgba(217,119,6,0.07)', border: 'rgba(217,119,6,0.22)', icon: '◆' },
+  'Sell':        { color: '#dc2626', bg: 'rgba(220,38,38,0.06)', border: 'rgba(220,38,38,0.2)', icon: '▼' },
+  'Strong Sell': { color: '#991b1b', bg: 'rgba(153,27,27,0.07)', border: 'rgba(153,27,27,0.25)', icon: '▼▼' },
 };
 
 function getVerdictStyle(verdict) {
@@ -44,7 +44,7 @@ function ScoreRing({ score, size = 72, stroke = 5, color }) {
   const offset = circ - (pct / 100) * circ;
   return (
     <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={stroke} />
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(0,0,0,0.06)" strokeWidth={stroke} />
       <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={stroke}
         strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
         style={{ transition: 'stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1)' }} />
@@ -60,14 +60,14 @@ function ScoreRing({ score, size = 72, stroke = 5, color }) {
 function ShareholdingBar({ data }) {
   if (!data) return null;
   const segments = [
-    { label: 'Promoter', value: data.promoter, color: '#7c4dff' },
-    { label: 'FII', value: data.fii, color: '#00b0ff' },
-    { label: 'DII', value: data.dii, color: '#00e676' },
-    { label: 'Public', value: data.public, color: '#ffa726' },
+    { label: 'Promoter', value: data.promoter, color: '#4f46e5' },
+    { label: 'FII', value: data.fii, color: '#0891b2' },
+    { label: 'DII', value: data.dii, color: '#16a34a' },
+    { label: 'Public', value: data.public, color: '#d97706' },
   ].filter(s => s.value && s.value > 0);
   return (
     <div>
-      <div style={{ display: 'flex', height: 10, borderRadius: 5, overflow: 'hidden', marginBottom: 14, background: 'rgba(255,255,255,0.04)' }}>
+      <div style={{ display: 'flex', height: 10, borderRadius: 5, overflow: 'hidden', marginBottom: 14, background: 'rgba(0,0,0,0.04)' }}>
         {segments.map((s, i) => (
           <div key={i} style={{ width: `${s.value}%`, background: s.color, transition: 'width 0.8s ease' }} />
         ))}
@@ -86,8 +86,8 @@ function ShareholdingBar({ data }) {
 }
 
 function IndicatorPill({ label, value, signal }) {
-  const sigColor = signal === 'Bullish' || signal === 'Buy' ? '#00e676'
-    : signal === 'Bearish' || signal === 'Sell' ? '#ef5350' : '#ffa726';
+  const sigColor = signal === 'Bullish' || signal === 'Buy' ? '#16a34a'
+    : signal === 'Bearish' || signal === 'Sell' ? '#dc2626' : '#d97706';
   return (
     <div className="indicator-pill">
       <span className="label-text" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
@@ -143,7 +143,7 @@ function TextBlock({ item }) {
           {(item.name || item.pattern) && <span style={{ fontWeight: 600, color: 'var(--text-primary)', display: 'block', marginBottom: 4 }}>{item.name || item.pattern}</span>}
           {item.description || item.details || item.signal || JSON.stringify(item)}
           {item.signal && typeof item !== 'string' && item.name && (
-            <span style={{ marginLeft: 8, fontSize: 11, color: item.signal === 'Bullish' ? '#00e676' : item.signal === 'Bearish' ? '#ef5350' : '#ffa726', fontWeight: 600 }}>({item.signal})</span>
+            <span style={{ marginLeft: 8, fontSize: 11, color: item.signal === 'Bullish' ? '#16a34a' : item.signal === 'Bearish' ? '#dc2626' : '#d97706', fontWeight: 600 }}>({item.signal})</span>
           )}
         </>
       )}
@@ -301,20 +301,24 @@ export default function Home() {
       </Head>
 
       <style jsx global>{`
-        /* ─── Design Tokens ─── */
+        /* ─── Design Tokens — Premium Light ─── */
         :root {
-          --bg-primary: #080c14;
-          --bg-elevated: #0d1220;
-          --card-bg: rgba(13,18,32,0.72);
-          --card-border: rgba(255,255,255,0.055);
-          --text-primary: #e4e8f0;
-          --text-secondary: #9aa3bc;
-          --text-muted: #4d5672;
-          --accent-blue: #4d8bff;
-          --accent-purple: #7c4dff;
-          --accent-green: #00e676;
-          --accent-red: #ef5350;
-          --accent-amber: #ffa726;
+          --bg-primary: #f5f6fa;
+          --bg-elevated: #ffffff;
+          --card-bg: #ffffff;
+          --card-border: rgba(0,0,0,0.06);
+          --card-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.03);
+          --card-shadow-hover: 0 4px 12px rgba(0,0,0,0.06), 0 8px 32px rgba(0,0,0,0.04);
+          --text-primary: #1a1f36;
+          --text-secondary: #4a5568;
+          --text-muted: #94a0b4;
+          --accent-blue: #4f46e5;
+          --accent-purple: #7c3aed;
+          --accent-green: #16a34a;
+          --accent-red: #dc2626;
+          --accent-amber: #d97706;
+          --pill-bg: #f3f4f8;
+          --pill-border: rgba(0,0,0,0.04);
           --radius-sm: 8px;
           --radius-md: 12px;
           --radius-lg: 16px;
@@ -335,12 +339,11 @@ export default function Home() {
 
         ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 3px; }
 
         /* ─── Keyframes ─── */
-        @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
         @keyframes spin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
-        @keyframes subtle-float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-6px); } }
 
         /* ─── Typography ─── */
         .label-text { font-size: 12px; color: var(--text-muted); font-weight: 500; }
@@ -352,59 +355,58 @@ export default function Home() {
           border: 1px solid var(--card-border);
           border-radius: var(--radius-lg);
           padding: 24px;
-          animation: fadeUp 0.5s cubic-bezier(0.22,1,0.36,1) both;
-          backdrop-filter: blur(24px);
-          -webkit-backdrop-filter: blur(24px);
-          transition: border-color 0.3s, box-shadow 0.3s;
+          box-shadow: var(--card-shadow);
+          animation: fadeUp 0.45s cubic-bezier(0.22,1,0.36,1) both;
+          transition: box-shadow 0.3s, border-color 0.3s;
         }
         .card:hover {
-          border-color: rgba(255,255,255,0.1);
-          box-shadow: 0 8px 40px rgba(0,0,0,0.25);
+          box-shadow: var(--card-shadow-hover);
+          border-color: rgba(0,0,0,0.09);
         }
         .card-header { display:flex; align-items:center; gap:10px; margin-bottom:20px; }
         .card-title {
           margin:0; font-size:13px; font-weight:700; text-transform:uppercase;
           letter-spacing:0.09em;
         }
-        .card-header-line { flex:1; height:1px; background:rgba(255,255,255,0.05); }
+        .card-header-line { flex:1; height:1px; background:rgba(0,0,0,0.06); }
 
         /* ─── Indicator Pill ─── */
         .indicator-pill {
           display:flex; align-items:center; justify-content:space-between; gap:8px;
           padding:10px 14px; border-radius:var(--radius-sm);
-          background:rgba(255,255,255,0.022); border:1px solid rgba(255,255,255,0.04);
+          background:var(--pill-bg); border:1px solid var(--pill-border);
           transition: background 0.2s;
         }
-        .indicator-pill:hover { background:rgba(255,255,255,0.04); }
+        .indicator-pill:hover { background:#ecedf2; }
 
         /* ─── Text Block ─── */
         .text-block {
           padding:10px 14px; border-radius:var(--radius-sm);
-          background:rgba(255,255,255,0.022); border:1px solid rgba(255,255,255,0.04);
+          background:var(--pill-bg); border:1px solid var(--pill-border);
           font-size:13px; line-height:1.55; color:var(--text-secondary);
         }
 
         /* ─── News Item ─── */
         .news-item {
           display:block; padding:12px 14px; border-radius:var(--radius-sm); text-decoration:none;
-          background:rgba(255,255,255,0.018); border:1px solid rgba(255,255,255,0.04);
+          background:var(--pill-bg); border:1px solid var(--pill-border);
           transition: all 0.2s;
         }
-        .news-item:hover { background:rgba(255,255,255,0.045); border-color:rgba(255,255,255,0.09); }
+        .news-item:hover { background:#ecedf2; border-color:rgba(0,0,0,0.08); }
 
         /* ─── Search Input ─── */
         .search-input {
           width:100%; padding:16px 20px 16px 50px;
           font-size:16px; font-family:'DM Sans',sans-serif; font-weight:500;
-          background:rgba(255,255,255,0.035); border:1.5px solid rgba(255,255,255,0.07);
+          background:#ffffff; border:1.5px solid rgba(0,0,0,0.1);
           border-radius:var(--radius-md); color:var(--text-primary); outline:none;
           transition:all 0.25s;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.03);
         }
         .search-input::placeholder { color:var(--text-muted); font-weight:400; }
         .search-input:focus {
           border-color:var(--accent-blue);
-          background:rgba(77,139,255,0.04);
-          box-shadow:0 0 0 4px rgba(77,139,255,0.08);
+          box-shadow:0 0 0 4px rgba(79,70,229,0.1), 0 1px 4px rgba(0,0,0,0.03);
         }
 
         /* ─── Buttons ─── */
@@ -416,33 +418,36 @@ export default function Home() {
           border:none; border-radius:var(--radius-md); cursor:pointer;
           transition:all 0.25s; text-transform:uppercase;
         }
-        .btn-primary:hover:not(:disabled) { transform:translateY(-1px); box-shadow:0 8px 28px rgba(77,139,255,0.3); }
+        .btn-primary:hover:not(:disabled) { transform:translateY(-1px); box-shadow:0 8px 24px rgba(79,70,229,0.25); }
         .btn-primary:active:not(:disabled) { transform:scale(0.97); }
         .btn-primary:disabled { opacity:0.45; cursor:not-allowed; }
 
         .btn-ghost {
           display:inline-flex; align-items:center; gap:6px;
           padding:9px 16px; font-size:13px; font-weight:600; font-family:'DM Sans',sans-serif;
-          color:var(--text-secondary); background:rgba(255,255,255,0.035);
-          border:1px solid rgba(255,255,255,0.07); border-radius:var(--radius-sm); cursor:pointer;
+          color:var(--text-secondary); background:#ffffff;
+          border:1px solid rgba(0,0,0,0.1); border-radius:var(--radius-sm); cursor:pointer;
           transition:all 0.2s;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.04);
         }
-        .btn-ghost:hover { background:rgba(255,255,255,0.06); color:var(--text-primary); }
+        .btn-ghost:hover { background:#f8f9fc; color:var(--text-primary); border-color:rgba(0,0,0,0.15); }
 
         .chip {
-          border:1px solid rgba(255,255,255,0.07); background:rgba(255,255,255,0.025);
+          border:1px solid rgba(0,0,0,0.08); background:#ffffff;
           color:var(--text-secondary); padding:9px 16px; border-radius:var(--radius-sm);
           font-size:13px; font-weight:500; cursor:pointer;
           transition:all 0.2s; font-family:'DM Sans',sans-serif;
           display:inline-flex; align-items:center; gap:8px; white-space:nowrap;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.03);
         }
         .chip:hover {
-          border-color:var(--accent-blue); background:rgba(77,139,255,0.05);
+          border-color:var(--accent-blue); background:rgba(79,70,229,0.04);
           color:var(--text-primary); transform:translateY(-1px);
+          box-shadow: 0 2px 8px rgba(0,0,0,0.06);
         }
         .chip:active { transform:scale(0.97); }
         .chip .tag {
-          font-size:10px; color:var(--text-muted); background:rgba(255,255,255,0.04);
+          font-size:10px; color:var(--text-muted); background:var(--pill-bg);
           padding:2px 6px; border-radius:4px; font-weight:600; letter-spacing:0.04em;
         }
 
@@ -450,7 +455,7 @@ export default function Home() {
         .fund-item {
           display:flex; flex-direction:column; gap:4px;
           padding:12px 14px; border-radius:var(--radius-sm);
-          background:rgba(255,255,255,0.022); border:1px solid rgba(255,255,255,0.04);
+          background:var(--pill-bg); border:1px solid var(--pill-border);
         }
         .fund-label {
           font-size:11px; color:var(--text-muted); text-transform:uppercase;
@@ -460,7 +465,7 @@ export default function Home() {
 
         .loader-ring {
           width:48px; height:48px;
-          border:3px solid rgba(255,255,255,0.06);
+          border:3px solid rgba(0,0,0,0.06);
           border-top-color:var(--accent-blue);
           border-radius:50%;
           animation:spin 0.8s linear infinite;
@@ -469,26 +474,25 @@ export default function Home() {
         /* ─── Autocomplete Dropdown ─── */
         .suggest-dropdown {
           position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:50;
-          background:var(--bg-elevated); border:1px solid rgba(255,255,255,0.1);
+          background:#ffffff; border:1px solid rgba(0,0,0,0.1);
           border-radius:var(--radius-md); overflow:hidden;
-          box-shadow:0 16px 48px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04);
-          backdrop-filter:blur(24px);
+          box-shadow:0 12px 40px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.03);
           max-height:400px; overflow-y:auto;
         }
         .suggest-item {
           display:flex; align-items:center; gap:12px;
           padding:12px 16px; cursor:pointer; transition:background 0.15s;
-          border-bottom:1px solid rgba(255,255,255,0.03);
+          border-bottom:1px solid rgba(0,0,0,0.04);
         }
         .suggest-item:last-child { border-bottom:none; }
-        .suggest-item:hover, .suggest-item.active { background:rgba(77,139,255,0.08); }
+        .suggest-item:hover, .suggest-item.active { background:rgba(79,70,229,0.05); }
         .suggest-item .s-name {
           font-size:14px; font-weight:600; color:var(--text-primary); flex:1;
           overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
         }
         .suggest-item .s-ticker {
           font-size:12px; font-weight:600; font-family:'JetBrains Mono',monospace;
-          color:var(--accent-blue); background:rgba(77,139,255,0.08);
+          color:var(--accent-blue); background:rgba(79,70,229,0.06);
           padding:2px 8px; border-radius:4px; letter-spacing:0.03em;
         }
         .suggest-item .s-sector {
@@ -497,14 +501,14 @@ export default function Home() {
         }
         .suggest-hint {
           padding:8px 16px; font-size:11px; color:var(--text-muted);
-          border-top:1px solid rgba(255,255,255,0.04);
+          border-top:1px solid rgba(0,0,0,0.05); background:#fafbfc;
           display:flex; align-items:center; gap:6px;
         }
         .suggest-hint kbd {
           display:inline-block; padding:1px 5px; font-size:10px;
-          border:1px solid rgba(255,255,255,0.12); border-radius:3px;
+          border:1px solid rgba(0,0,0,0.12); border-radius:3px;
           color:var(--text-secondary); font-family:'JetBrains Mono',monospace;
-          background:rgba(255,255,255,0.04);
+          background:#f3f4f8;
         }
 
         /* ─── Responsive ─── */
@@ -517,16 +521,10 @@ export default function Home() {
         }
       `}</style>
 
-      {/* Background Gradients */}
+      {/* Background — subtle warm gradient */}
       <div style={{ position:'fixed', inset:0, zIndex:0, pointerEvents:'none' }}>
-        <div style={{ position:'absolute', top:'-15%', left:'-5%', width:'45%', height:'45%', background:'radial-gradient(ellipse, rgba(77,139,255,0.045) 0%, transparent 70%)', filter:'blur(40px)' }} />
-        <div style={{ position:'absolute', bottom:'-10%', right:'-8%', width:'35%', height:'35%', background:'radial-gradient(ellipse, rgba(124,77,255,0.035) 0%, transparent 70%)', filter:'blur(40px)' }} />
-        {/* Subtle grid pattern */}
-        <div style={{
-          position:'absolute', inset:0, opacity:0.025,
-          backgroundImage:'linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px)',
-          backgroundSize:'64px 64px',
-        }} />
+        <div style={{ position:'absolute', top:'-20%', left:'-10%', width:'50%', height:'50%', background:'radial-gradient(ellipse, rgba(79,70,229,0.04) 0%, transparent 65%)', filter:'blur(60px)' }} />
+        <div style={{ position:'absolute', bottom:'-15%', right:'-10%', width:'40%', height:'40%', background:'radial-gradient(ellipse, rgba(124,58,237,0.03) 0%, transparent 65%)', filter:'blur(60px)' }} />
       </div>
 
       <div style={{ position:'relative', zIndex:1, maxWidth:1140, margin:'0 auto', padding:'0 24px' }}>
@@ -538,7 +536,7 @@ export default function Home() {
               width:38, height:38, borderRadius:10,
               background:'linear-gradient(135deg, var(--accent-blue), var(--accent-purple))',
               display:'flex', alignItems:'center', justifyContent:'center',
-              fontSize:20, fontWeight:700, color:'#fff', boxShadow:'0 4px 16px rgba(77,139,255,0.25)',
+              fontSize:20, fontWeight:700, color:'#fff', boxShadow:'0 4px 12px rgba(79,70,229,0.2)',
             }}>₹</div>
             <div>
               <h1 style={{ fontSize:16, fontWeight:700, color:'var(--text-primary)', letterSpacing:'-0.01em', lineHeight:1.2 }}>
@@ -550,7 +548,7 @@ export default function Home() {
             </div>
           </div>
           <button className="btn-ghost" onClick={() => setShowWatchlist(!showWatchlist)}>
-            <span style={{ fontSize:15, color:'#ffa726' }}>★</span>
+            <span style={{ fontSize:15, color:'#d97706' }}>★</span>
             Watchlist ({watchlist.length})
           </button>
         </header>
@@ -564,7 +562,7 @@ export default function Home() {
                 <button key={w} className="chip" onClick={() => { analyse(w); setShowWatchlist(false); }}>
                   {w}
                   <span onClick={e => { e.stopPropagation(); toggleWatchlist(w); }}
-                    style={{ color:'var(--accent-red)', cursor:'pointer', fontSize:14 }}>×</span>
+                    style={{ color:'#dc2626', cursor:'pointer', fontSize:14 }}>×</span>
                 </button>
               ))}
             </div>
@@ -577,7 +575,7 @@ export default function Home() {
             <div style={{ marginBottom:20 }}>
               <span style={{
                 display:'inline-block', padding:'6px 14px', borderRadius:8,
-                background:'rgba(77,139,255,0.07)', border:'1px solid rgba(77,139,255,0.14)',
+                background:'rgba(79,70,229,0.06)', border:'1px solid rgba(79,70,229,0.14)',
                 fontSize:11, fontWeight:600, color:'var(--accent-blue)', letterSpacing:'0.07em', textTransform:'uppercase',
               }}>
                 Gemini 2.0 Flash · Search-Grounded Analysis
@@ -585,7 +583,7 @@ export default function Home() {
             </div>
             <h2 className="hero-title" style={{
               fontSize:44, fontWeight:700, lineHeight:1.12, letterSpacing:'-0.03em',
-              background:'linear-gradient(135deg, var(--text-primary) 25%, var(--text-secondary) 85%)',
+              background:'linear-gradient(135deg, #1a1f36 25%, #4a5568 85%)',
               WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
               marginBottom:16, maxWidth:520, marginLeft:'auto', marginRight:'auto',
             }}>
@@ -675,8 +673,8 @@ export default function Home() {
         {error && (
           <div style={{
             maxWidth:600, margin:'20px auto', padding:'14px 20px', borderRadius:'var(--radius-md)',
-            background:'rgba(239,83,80,0.06)', border:'1px solid rgba(239,83,80,0.18)',
-            color:'#ef5350', fontSize:14, textAlign:'center',
+            background:'rgba(220,38,38,0.05)', border:'1px solid rgba(220,38,38,0.15)',
+            color:'#dc2626', fontSize:14, textAlign:'center',
           }}>
             {error}
           </div>
@@ -693,10 +691,10 @@ export default function Home() {
                   <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:6 }}>
                     <h2 style={{ fontSize:24, fontWeight:700, letterSpacing:'-0.02em' }}>{stockName}</h2>
                     <button onClick={() => toggleWatchlist(stockName)} title="Toggle watchlist" style={{
-                      background: watchlist.includes(stockName) ? 'rgba(255,167,38,0.1)' : 'transparent',
-                      border: `1px solid ${watchlist.includes(stockName) ? 'rgba(255,167,38,0.3)' : 'rgba(255,255,255,0.07)'}`,
+                      background: watchlist.includes(stockName) ? 'rgba(217,119,6,0.08)' : 'transparent',
+                      border: `1px solid ${watchlist.includes(stockName) ? 'rgba(217,119,6,0.3)' : 'rgba(0,0,0,0.1)'}`,
                       borderRadius:8, padding:'3px 10px', cursor:'pointer', fontSize:16,
-                      color: watchlist.includes(stockName) ? '#ffa726' : 'var(--text-muted)', transition:'all 0.2s',
+                      color: watchlist.includes(stockName) ? '#d97706' : 'var(--text-muted)', transition:'all 0.2s',
                     }}>
                       {watchlist.includes(stockName) ? '★' : '☆'}
                     </button>
@@ -711,7 +709,7 @@ export default function Home() {
                           fontSize:16, fontWeight:600, fontFamily:"'JetBrains Mono',monospace",
                           color: isPositive ? 'var(--accent-green)' : 'var(--accent-red)', display:'flex', alignItems:'center', gap:4,
                           padding:'4px 10px', borderRadius:6,
-                          background: isPositive ? 'rgba(0,230,118,0.07)' : 'rgba(239,83,80,0.07)',
+                          background: isPositive ? 'rgba(22,163,74,0.08)' : 'rgba(220,38,38,0.08)',
                         }}>
                           {isPositive ? '▲' : '▼'}
                           {change !== undefined && (typeof change === 'number' ? Math.abs(change).toFixed(2) : change)}
@@ -732,11 +730,11 @@ export default function Home() {
               {(techScore > 0 || fundScore > 0) && (
                 <div className="score-row" style={{
                   display:'flex', justifyContent:'center', gap:36, marginTop:24, padding:'20px 0 0',
-                  borderTop:'1px solid rgba(255,255,255,0.045)',
+                  borderTop:'1px solid rgba(0,0,0,0.06)',
                 }}>
                   {techScore > 0 && (
                     <div style={{ textAlign:'center' }}>
-                      <ScoreRing score={techScore} color="#4d8bff" />
+                      <ScoreRing score={techScore} color="#4f46e5" />
                       <p className="label-text" style={{ marginTop:8, letterSpacing:'0.06em', textTransform:'uppercase' }}>Technical (45%)</p>
                     </div>
                   )}
@@ -760,7 +758,7 @@ export default function Home() {
             <div className="results-grid" style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:14 }}>
 
               {Array.isArray(technicals) && technicals.length > 0 && (
-                <Card title="Technical Indicators" icon="📊" accentColor="#4d8bff" style={{ animationDelay:'0.05s' }}>
+                <Card title="Technical Indicators" icon="📊" accentColor="#4f46e5" style={{ animationDelay:'0.05s' }}>
                   <div style={{ display:'grid', gap:5 }}>
                     {technicals.map((t, i) => (
                       <IndicatorPill key={i}
@@ -773,7 +771,7 @@ export default function Home() {
               )}
 
               {Object.keys(fundamentals).length > 0 && (
-                <Card title="Fundamental Metrics" icon="📈" accentColor="#7c4dff" style={{ animationDelay:'0.1s' }}>
+                <Card title="Fundamental Metrics" icon="📈" accentColor="#7c3aed" style={{ animationDelay:'0.1s' }}>
                   <div className="fund-grid">
                     {Object.entries(fundamentals).map(([key, val]) => (
                       <div className="fund-item" key={key}>
@@ -786,13 +784,13 @@ export default function Home() {
               )}
 
               {Object.keys(shareholding).length > 0 && (
-                <Card title="Shareholding Pattern" icon="🏛" accentColor="#00b0ff" style={{ animationDelay:'0.15s' }}>
+                <Card title="Shareholding Pattern" icon="🏛" accentColor="#0891b2" style={{ animationDelay:'0.15s' }}>
                   <ShareholdingBar data={shareholding} />
                 </Card>
               )}
 
               {Array.isArray(smartMoney) && smartMoney.length > 0 && (
-                <Card title="Smart Money Signals" icon="💰" accentColor="#ffd740" style={{ animationDelay:'0.2s' }}>
+                <Card title="Smart Money Signals" icon="💰" accentColor="#d97706" style={{ animationDelay:'0.2s' }}>
                   <div style={{ display:'grid', gap:6 }}>
                     {smartMoney.map((item, i) => <TextBlock key={i} item={item} />)}
                   </div>
@@ -800,24 +798,24 @@ export default function Home() {
               )}
 
               {Array.isArray(news) && news.length > 0 && (
-                <Card title="Recent News" icon="📰" accentColor="#00e676" style={{ animationDelay:'0.25s' }}>
+                <Card title="Recent News" icon="📰" accentColor="#16a34a" style={{ animationDelay:'0.25s' }}>
                   <div style={{ display:'grid', gap:5 }}>{news.map((item, i) => <NewsItem key={i} item={item} />)}</div>
                 </Card>
               )}
 
               {Array.isArray(candlestickPatterns) && candlestickPatterns.length > 0 && (
-                <Card title="Candlestick Patterns" icon="🕯" accentColor="#ff6e40" style={{ animationDelay:'0.3s' }}>
+                <Card title="Candlestick Patterns" icon="🕯" accentColor="#ea580c" style={{ animationDelay:'0.3s' }}>
                   <div style={{ display:'grid', gap:6 }}>{candlestickPatterns.map((p, i) => <TextBlock key={i} item={p} />)}</div>
                 </Card>
               )}
 
               {(risks.length > 0 || catalysts.length > 0) && (
-                <Card title="Risks & Catalysts" icon="⚡" accentColor="#ff5252" style={{ animationDelay:'0.35s' }}>
+                <Card title="Risks & Catalysts" icon="⚡" accentColor="#dc2626" style={{ animationDelay:'0.35s' }}>
                   {risks.length > 0 && (
                     <div style={{ marginBottom: catalysts.length > 0 ? 18 : 0 }}>
-                      <p style={{ fontSize:12, color:'var(--accent-red)', fontWeight:700, marginBottom:8, textTransform:'uppercase', letterSpacing:'0.06em' }}>Risks</p>
+                      <p style={{ fontSize:12, color:'#dc2626', fontWeight:700, marginBottom:8, textTransform:'uppercase', letterSpacing:'0.06em' }}>Risks</p>
                       {risks.map((r, i) => (
-                        <p key={i} style={{ fontSize:13, color:'var(--text-secondary)', lineHeight:1.6, marginBottom:6, paddingLeft:12, borderLeft:'2px solid rgba(239,83,80,0.3)' }}>
+                        <p key={i} style={{ fontSize:13, color:'var(--text-secondary)', lineHeight:1.6, marginBottom:6, paddingLeft:12, borderLeft:'2px solid rgba(220,38,38,0.25)' }}>
                           {typeof r === 'string' ? r : r.description || JSON.stringify(r)}
                         </p>
                       ))}
@@ -825,9 +823,9 @@ export default function Home() {
                   )}
                   {catalysts.length > 0 && (
                     <div>
-                      <p style={{ fontSize:12, color:'var(--accent-green)', fontWeight:700, marginBottom:8, textTransform:'uppercase', letterSpacing:'0.06em' }}>Catalysts</p>
+                      <p style={{ fontSize:12, color:'#16a34a', fontWeight:700, marginBottom:8, textTransform:'uppercase', letterSpacing:'0.06em' }}>Catalysts</p>
                       {catalysts.map((c, i) => (
-                        <p key={i} style={{ fontSize:13, color:'var(--text-secondary)', lineHeight:1.6, marginBottom:6, paddingLeft:12, borderLeft:'2px solid rgba(0,230,118,0.3)' }}>
+                        <p key={i} style={{ fontSize:13, color:'var(--text-secondary)', lineHeight:1.6, marginBottom:6, paddingLeft:12, borderLeft:'2px solid rgba(22,163,74,0.25)' }}>
                           {typeof c === 'string' ? c : c.description || JSON.stringify(c)}
                         </p>
                       ))}
@@ -837,13 +835,13 @@ export default function Home() {
               )}
 
               {Array.isArray(strategies) && strategies.length > 0 && (
-                <Card title="Trading Strategies" icon="🎯" accentColor="#4d8bff" style={{ animationDelay:'0.4s' }}>
+                <Card title="Trading Strategies" icon="🎯" accentColor="#4f46e5" style={{ animationDelay:'0.4s' }}>
                   <div style={{ display:'grid', gap:6 }}>{strategies.map((s, i) => <TextBlock key={i} item={s} />)}</div>
                 </Card>
               )}
 
               {Array.isArray(researchLinks) && researchLinks.length > 0 && (
-                <Card title="Research Links" icon="🔗" accentColor="#00b0ff" style={{ animationDelay:'0.45s' }}>
+                <Card title="Research Links" icon="🔗" accentColor="#0891b2" style={{ animationDelay:'0.45s' }}>
                   <div style={{ display:'grid', gap:5 }}>
                     {researchLinks.map((link, i) => (
                       <a key={i} href={link.url || link.href || link} target="_blank" rel="noopener noreferrer"
@@ -860,7 +858,7 @@ export default function Home() {
             {/* Disclaimer */}
             <div style={{
               marginTop:28, padding:'14px 20px', borderRadius:'var(--radius-md)',
-              background:'rgba(255,255,255,0.015)', border:'1px solid rgba(255,255,255,0.035)', textAlign:'center',
+              background:'#ffffff', border:'1px solid rgba(0,0,0,0.06)', textAlign:'center',
             }}>
               <p style={{ fontSize:11, color:'var(--text-muted)', lineHeight:1.65 }}>
                 <strong style={{ color:'var(--text-secondary)' }}>Disclaimer:</strong> For informational and educational purposes only. Not financial or investment advice. Always consult a SEBI-registered financial advisor.
