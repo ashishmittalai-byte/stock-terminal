@@ -1,7 +1,8 @@
-// pages/api/analyse.js — Edge Runtime (30s timeout on Hobby)
-export const config = { runtime: 'edge' };
+// pages/api/analyse.js — Standard serverless (no Edge Runtime needed without grounding)
 
-const PROMPT = `Expert Indian equity analyst. Use Google Search to get REAL-TIME LIVE market data. Return ONLY raw JSON (no markdown/backticks).
+const API_KEY = process.env.GEMINI_API_KEY;
+
+const PROMPT = `Expert Indian equity analyst. Return ONLY raw JSON (no markdown/backticks).
 {
   "stockName":string,"ticker":string,"currentPrice":number,"change":number,"changePercent":number,
   "open":number,"dayHigh":number,"dayLow":number,"previousClose":number,"volume":string,
@@ -35,8 +36,8 @@ function extractJSON(text) {
   return null;
 }
 
-async function callGemini(apiKey, model, stock) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+async function callGemini(model, stock) {
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + API_KEY;
   const isGemma = model.startsWith('gemma');
 
   const body = {
@@ -44,24 +45,19 @@ async function callGemini(apiKey, model, stock) {
       role: 'user',
       parts: [{
         text: isGemma
-          ? `${PROMPT}\n\nAnalyse this Indian stock with all indicators: ${stock}`
-          : `Get current live price and analyse Indian stock: ${stock}`
+          ? PROMPT + '\n\nAnalyse this Indian stock: ' + stock
+          : 'Analyse Indian stock: ' + stock
       }],
     }],
     generationConfig: { temperature: 0.3, maxOutputTokens: 4096 },
   };
 
-  if (isGemma) {
-  }
-
-  // Gemini models: use system_instruction + google_search grounding
   if (!isGemma) {
     body.system_instruction = { parts: [{ text: PROMPT }] };
-    body.tools = [{ google_search: {} }];
   }
 
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 25000);
+  const timer = setTimeout(function() { ctrl.abort(); }, 9000);
   try {
     const res = await fetch(url, {
       method: 'POST',
@@ -70,71 +66,48 @@ async function callGemini(apiKey, model, stock) {
       body: JSON.stringify(body),
     });
     if (!res.ok) {
-      const e = await res.text().catch(() => '');
+      const e = await res.text().catch(function() { return ''; });
       if (res.status === 429) throw new Error('RATE_LIMIT');
       throw new Error('HTTP ' + res.status + ': ' + e.substring(0, 150));
     }
     const data = await res.json();
-    const cand = data.candidates?.[0];
-    if (!cand?.content?.parts) throw new Error('No content');
-    // Filter out thinking parts and only use actual text
-    const text = cand.content.parts.filter(p => p.text && !p.thought).map(p => p.text).join('\n');
+    const cand = data.candidates && data.candidates[0];
+    if (!cand || !cand.content || !cand.content.parts) throw new Error('No content');
+    var text = cand.content.parts.filter(function(p) { return p.text && !p.thought; }).map(function(p) { return p.text; }).join('\n');
     if (!text || text.trim().length < 30) throw new Error('Empty response');
     return text;
   } finally { clearTimeout(timer); }
 }
 
-export default async function handler(req) {
-  const H = { 'Content-Type': 'application/json' };
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+  if (!API_KEY) return res.status(500).json({ error: 'GEMINI_API_KEY not set' });
 
-  try {
-    if (req.method !== 'POST') {
-      return new Response(JSON.stringify({ error: 'POST only' }), { status: 405, headers: H });
-    }
-
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return new Response(JSON.stringify({ error: 'GEMINI_API_KEY not set' }), { status: 500, headers: H });
-    }
-
-    let body;
-    try { body = await req.json(); } catch {
-      return new Response(JSON.stringify({ error: 'Invalid body' }), { status: 400, headers: H });
-    }
-
-    const stock = body?.stock?.trim();
-    if (!stock) {
-      return new Response(JSON.stringify({ error: 'Stock name required' }), { status: 400, headers: H });
-    }
-
-    // Free tier (no billing needed!) — confirmed May 2026:
-    // gemini-3.1-flash-lite  → 1,000 RPD, 15 RPM ← BEST!
-    // gemini-3.1-flash       → 250 RPD, 10 RPM
-    // gemini-2.5-flash-lite  → 20 RPD, 10 RPM
-    // gemma-3-27b-it         → 14,400 RPD (no live prices)
-    // Total: ~15,670 free analyses/day!
-    const models = ['gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemma-4-26b-a4b-it'];
-    const errors = [];
-
-    for (const model of models) {
-      try {
-        const text = await callGemini(apiKey, model, stock);
-        const json = extractJSON(text);
-        if (json) {
-          json._model = model;
-          json._skipped = errors.length > 0 ? errors : undefined;
-          return new Response(JSON.stringify(json), { status: 200, headers: H });
-        }
-        return new Response(JSON.stringify({ stockName: stock, rawAnalysis: text, verdict: 'Hold', _model: model, _skipped: errors }), { status: 200, headers: H });
-      } catch (err) {
-        errors.push(`${model}: ${err.name === 'AbortError' ? 'timed out' : err.message}`);
-      }
-    }
-
-    return new Response(JSON.stringify({ error: `Failed: ${errors.join(' | ')}` }), { status: 502, headers: H });
-
-  } catch (e) {
-    // Catch-all: NEVER return non-JSON
-    return new Response(JSON.stringify({ error: `Unexpected error: ${e.message}` }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  var body;
+  try { body = req.body; } catch(e) {
+    return res.status(400).json({ error: 'Invalid body' });
   }
+
+  var stock = body && body.stock ? body.stock.trim() : '';
+  if (!stock) return res.status(400).json({ error: 'Stock name required' });
+
+  var models = ['gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemini-2.5-flash'];
+  var errors = [];
+
+  for (var m = 0; m < models.length; m++) {
+    try {
+      var text = await callGemini(models[m], stock);
+      var json = extractJSON(text);
+      if (json) {
+        json._model = models[m];
+        json._skipped = errors.length > 0 ? errors : undefined;
+        return res.status(200).json(json);
+      }
+      return res.status(200).json({ stockName: stock, rawAnalysis: text, verdict: 'Hold', _model: models[m] });
+    } catch (err) {
+      errors.push(models[m] + ': ' + (err.name === 'AbortError' ? 'timed out' : err.message));
+    }
+  }
+
+  return res.status(502).json({ error: 'Failed: ' + errors.join(' | ') });
 }
