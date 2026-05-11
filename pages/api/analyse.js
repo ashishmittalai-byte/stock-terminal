@@ -1,7 +1,7 @@
 // pages/api/analyse.js — Edge Runtime (30s timeout on Hobby)
 export const config = { runtime: 'edge' };
 
-const PROMPT = `Expert Indian equity analyst. Return ONLY raw JSON (no markdown/backticks).
+const PROMPT = `Expert Indian equity analyst. Use Google Search to get REAL-TIME LIVE market data. Return ONLY raw JSON (no markdown/backticks).
 {
   "stockName":string,"ticker":string,"currentPrice":number,"change":number,"changePercent":number,
   "open":number,"dayHigh":number,"dayLow":number,"previousClose":number,"volume":string,
@@ -46,7 +46,8 @@ async function callGemini(apiKey, model, stock) {
       signal: ctrl.signal,
       body: JSON.stringify({
         system_instruction: { parts: [{ text: PROMPT }] },
-        contents: [{ role: 'user', parts: [{ text: `Analyse: ${stock}` }] }],
+        contents: [{ role: 'user', parts: [{ text: `Get current live price and analyse Indian stock: ${stock}` }] }],
+        tools: [{ google_search: {} }],
         generationConfig: { temperature: 0.3, maxOutputTokens: 4096 },
       }),
     });
@@ -84,7 +85,11 @@ export default async function handler(req) {
     return new Response(JSON.stringify({ error: 'Stock name required' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   }
 
-  const models = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+  // Free tier quotas (separate per model, reset daily):
+  // gemini-2.5-flash-lite → 20 RPD, 10 RPM (FAST, best for free tier)
+  // gemini-2.5-flash      → 20 RPD, 5 RPM  (better quality, slower)
+  // Total: 40 analyses/day on free tier across both models
+  const models = ['gemini-2.5-flash-lite', 'gemini-2.5-flash'];
   const errors = [];
 
   for (const model of models) {
