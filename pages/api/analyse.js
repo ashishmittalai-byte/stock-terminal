@@ -100,8 +100,11 @@ export default async function handler(req) {
       try {
         const text = await callGemini(apiKey, model, stock);
         const json = extractJSON(text);
-        if (json) return new Response(JSON.stringify(json), { status: 200, headers: H });
-        return new Response(JSON.stringify({ stockName: stock, rawAnalysis: text, verdict: 'Hold' }), { status: 200, headers: H });
+        if (json) {
+          json._model = model; // Tag which model was used
+          return new Response(JSON.stringify(json), { status: 200, headers: H });
+        }
+        return new Response(JSON.stringify({ stockName: stock, rawAnalysis: text, verdict: 'Hold', _model: model }), { status: 200, headers: H });
       } catch (err) {
         errors.push(`${model}: ${err.name === 'AbortError' ? 'timed out' : err.message}`);
       }
