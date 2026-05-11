@@ -116,7 +116,7 @@ Return ONLY a valid JSON object (no markdown, no backticks, no extra text) with 
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 8192, responseMimeType: "application/json" },
+        tools: [{ google_search: {} }], generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
       }),
     });
     if (!response.ok) {
