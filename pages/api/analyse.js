@@ -88,11 +88,12 @@ export default async function handler(req) {
       return new Response(JSON.stringify({ error: 'Stock name required' }), { status: 400, headers: H });
     }
 
-    // Free tier quotas (separate per model, reset daily):
-    // gemini-2.5-flash-lite → 20 RPD, 10 RPM (FAST, best for free tier)
-    // gemini-2.5-flash      → 20 RPD, 5 RPM  (better quality, slower)
-    // Total: 40 analyses/day on free tier across both models
-    const models = ['gemini-2.5-flash-lite', 'gemini-2.5-flash'];
+    // Free tier quotas — USE THE HIGHEST LIMITS:
+    // gemini-3.1-flash-lite  → 500 RPD, 15 RPM  ← BEST free tier model!
+    // gemini-3-flash-preview → 20 RPD, 5 RPM
+    // gemini-2.5-flash-lite  → 20 RPD, 10 RPM
+    // Total: 540 analyses/day on free tier!
+    const models = ['gemini-3.1-flash-lite-preview', 'gemini-3-flash-preview', 'gemini-2.5-flash-lite'];
     const errors = [];
 
     for (const model of models) {
