@@ -1360,6 +1360,26 @@ export default function Home() {
           {screenData && !screenLoading && (
             <div ref={screenRef} style={{ paddingBottom:60 }}>
 
+              {/* Back & Action Bar */}
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14, flexWrap:'wrap', gap:8 }}>
+                <button className="btn-ghost" onClick={() => { setScreenData(null); setScreenError(''); setScreenStrategy(''); }}
+                  style={{ fontSize:13, fontWeight:600 }}>
+                  ← Back to Screener
+                </button>
+                <div style={{ display:'flex', gap:8 }}>
+                  <button className="btn-ghost" style={{ fontSize:11 }} onClick={exportCSV}>📥 Export CSV</button>
+                  <button className="btn-ghost" style={{ fontSize:11 }} onClick={() => { setScreenData(null); setScreenError(''); }}>🔄 New Scan</button>
+                </div>
+              </div>
+
+              {/* Back + Actions Bar */}
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14, flexWrap:'wrap', gap:8 }}>
+                <button className="btn-ghost" onClick={() => { setScreenData(null); setScreenError(''); }}
+                  style={{ fontSize:13 }}>
+                  ← Back to Strategies
+                </button>
+              </div>
+
               {/* Strategy Header */}
               <Card style={{ marginBottom:16 }}>
                 <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', flexWrap:'wrap', gap:12 }}>
