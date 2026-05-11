@@ -161,10 +161,44 @@ export default function Home() {
   const [error, setError] = useState('');
   const [watchlist, setWatchlist] = useState([]);
   const [showWatchlist, setShowWatchlist] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
   const resultsRef = useRef(null);
+  const suggestRef = useRef(null);
+  const debounceRef = useRef(null);
 
   useEffect(() => {
     try { const w = JSON.parse(localStorage.getItem('stockWatchlist') || '[]'); setWatchlist(w); } catch {}
+  }, []);
+
+  // Fetch suggestions with debounce
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!query.trim() || query.trim().length < 1) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/suggest?q=${encodeURIComponent(query.trim())}`);
+        const json = await res.json();
+        setSuggestions(json.suggestions || []);
+        setShowSuggestions((json.suggestions || []).length > 0);
+        setActiveIdx(-1);
+      } catch { setSuggestions([]); }
+    }, 180);
+    return () => clearTimeout(debounceRef.current);
+  }, [query]);
+
+  // Close suggestions on click outside
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (suggestRef.current && !suggestRef.current.contains(e.target)) setShowSuggestions(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
   const saveWatchlist = (w) => { setWatchlist(w); localStorage.setItem('stockWatchlist', JSON.stringify(w)); };
@@ -177,6 +211,8 @@ export default function Home() {
     const q = (stockName || query).trim();
     if (!q) return;
     setQuery(q);
+    setSuggestions([]);
+    setShowSuggestions(false);
     setLoading(true);
     setError('');
     setData(null);
@@ -198,7 +234,36 @@ export default function Home() {
     }
   }, [query]);
 
-  const handleKeyDown = (e) => { if (e.key === 'Enter') analyse(); };
+  const handleKeyDown = (e) => {
+    if (showSuggestions && suggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setActiveIdx(prev => (prev < suggestions.length - 1 ? prev + 1 : 0));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setActiveIdx(prev => (prev > 0 ? prev - 1 : suggestions.length - 1));
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (activeIdx >= 0 && activeIdx < suggestions.length) {
+          const picked = suggestions[activeIdx];
+          analyse(picked.name);
+        } else {
+          analyse();
+        }
+      } else if (e.key === 'Escape') {
+        setShowSuggestions(false);
+      }
+    } else if (e.key === 'Enter') {
+      analyse();
+    }
+  };
+
+  const pickSuggestion = (s) => {
+    setQuery(s.name);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    analyse(s.name);
+  };
 
   // Safe field extraction
   const d = data || {};
@@ -401,6 +466,47 @@ export default function Home() {
           animation:spin 0.8s linear infinite;
         }
 
+        /* ─── Autocomplete Dropdown ─── */
+        .suggest-dropdown {
+          position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:50;
+          background:var(--bg-elevated); border:1px solid rgba(255,255,255,0.1);
+          border-radius:var(--radius-md); overflow:hidden;
+          box-shadow:0 16px 48px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04);
+          backdrop-filter:blur(24px);
+          max-height:400px; overflow-y:auto;
+        }
+        .suggest-item {
+          display:flex; align-items:center; gap:12px;
+          padding:12px 16px; cursor:pointer; transition:background 0.15s;
+          border-bottom:1px solid rgba(255,255,255,0.03);
+        }
+        .suggest-item:last-child { border-bottom:none; }
+        .suggest-item:hover, .suggest-item.active { background:rgba(77,139,255,0.08); }
+        .suggest-item .s-name {
+          font-size:14px; font-weight:600; color:var(--text-primary); flex:1;
+          overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+        }
+        .suggest-item .s-ticker {
+          font-size:12px; font-weight:600; font-family:'JetBrains Mono',monospace;
+          color:var(--accent-blue); background:rgba(77,139,255,0.08);
+          padding:2px 8px; border-radius:4px; letter-spacing:0.03em;
+        }
+        .suggest-item .s-sector {
+          font-size:11px; color:var(--text-muted); font-weight:500;
+          white-space:nowrap;
+        }
+        .suggest-hint {
+          padding:8px 16px; font-size:11px; color:var(--text-muted);
+          border-top:1px solid rgba(255,255,255,0.04);
+          display:flex; align-items:center; gap:6px;
+        }
+        .suggest-hint kbd {
+          display:inline-block; padding:1px 5px; font-size:10px;
+          border:1px solid rgba(255,255,255,0.12); border-radius:3px;
+          color:var(--text-secondary); font-family:'JetBrains Mono',monospace;
+          background:rgba(255,255,255,0.04);
+        }
+
         /* ─── Responsive ─── */
         @media (max-width:768px) {
           .results-grid { grid-template-columns:1fr !important; }
@@ -492,7 +598,7 @@ export default function Home() {
         )}
 
         {/* ── Search Bar ── */}
-        <div style={{ maxWidth:600, margin: data || loading ? '20px auto' : '0 auto', position:'relative' }}>
+        <div ref={suggestRef} style={{ maxWidth:600, margin: data || loading ? '20px auto' : '0 auto', position:'relative' }}>
           <div style={{ position:'relative' }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
               style={{ position:'absolute', left:17, top:'50%', transform:'translateY(-50%)', pointerEvents:'none', opacity:0.7 }}>
@@ -500,8 +606,32 @@ export default function Home() {
             </svg>
             <input className="search-input" type="text"
               placeholder="Enter stock name or ticker… e.g. Reliance, INFY"
-              value={query} onChange={e => setQuery(e.target.value)}
-              onKeyDown={handleKeyDown} disabled={loading} />
+              value={query} onChange={e => { setQuery(e.target.value); setShowSuggestions(true); }}
+              onKeyDown={handleKeyDown} disabled={loading}
+              onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+              autoComplete="off" />
+
+            {/* ── Autocomplete Dropdown ── */}
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="suggest-dropdown">
+                {suggestions.map((s, i) => (
+                  <div key={`${s.ticker}-${i}`}
+                    className={`suggest-item${i === activeIdx ? ' active' : ''}`}
+                    onClick={() => pickSuggestion(s)}
+                    onMouseEnter={() => setActiveIdx(i)}
+                  >
+                    <span className="s-name">{s.name}</span>
+                    <span className="s-ticker">{s.ticker}</span>
+                    <span className="s-sector">{s.sector}</span>
+                  </div>
+                ))}
+                <div className="suggest-hint">
+                  <kbd>↑</kbd><kbd>↓</kbd> navigate
+                  <kbd>↵</kbd> select
+                  <kbd>esc</kbd> close
+                </div>
+              </div>
+            )}
           </div>
           <div style={{ display:'flex', justifyContent:'center', marginTop:14 }}>
             <button className="btn-primary" onClick={() => analyse()} disabled={loading || !query.trim()}>
