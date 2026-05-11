@@ -305,6 +305,7 @@ export default function Home() {
   const fundScore = parseScore(d.fundamentalScore || d.fundScore);
   const compositeScore = parseScore(d.compositeScore || d.overallScore || ((techScore * 0.45) + (fundScore * 0.55)));
   const stockName = d.stockName || d.name || query;
+  const modelUsed = d._model || '';
 
   return (
     <>
@@ -704,8 +705,13 @@ export default function Home() {
             <Card style={{ marginBottom:18, animationDelay:'0s' }}>
               <div className="price-header" style={{ display:'flex', flexWrap:'wrap', alignItems:'flex-start', justifyContent:'space-between', gap:20 }}>
                 <div style={{ flex:1, minWidth:200 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:6 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:6, flexWrap:'wrap' }}>
                     <h2 style={{ fontSize:24, fontWeight:700, letterSpacing:'-0.02em' }}>{stockName}</h2>
+                    {modelUsed && (
+                      <span style={{ fontSize:10, fontWeight:600, padding:'3px 8px', borderRadius:5, background:'rgba(79,70,229,0.07)', color:'#4f46e5', letterSpacing:'0.04em', fontFamily:"'JetBrains Mono',monospace", whiteSpace:'nowrap' }}>
+                        {modelUsed}
+                      </span>
+                    )}
                     <button onClick={() => toggleWatchlist(stockName)} title="Toggle watchlist" style={{
                       background: watchlist.includes(stockName) ? 'rgba(217,119,6,0.08)' : 'transparent',
                       border: `1px solid ${watchlist.includes(stockName) ? 'rgba(217,119,6,0.3)' : 'rgba(0,0,0,0.1)'}`,
