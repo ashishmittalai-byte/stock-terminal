@@ -66,42 +66,50 @@ async function callGemini(apiKey, model, stock) {
 }
 
 export default async function handler(req) {
-  if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'POST only' }), { status: 405, headers: { 'Content-Type': 'application/json' } });
-  }
+  const H = { 'Content-Type': 'application/json' };
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return new Response(JSON.stringify({ error: 'GEMINI_API_KEY not set' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
-  }
-
-  let body;
-  try { body = await req.json(); } catch {
-    return new Response(JSON.stringify({ error: 'Invalid body' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-  }
-
-  const stock = body?.stock?.trim();
-  if (!stock) {
-    return new Response(JSON.stringify({ error: 'Stock name required' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-  }
-
-  // Free tier quotas (separate per model, reset daily):
-  // gemini-2.5-flash-lite → 20 RPD, 10 RPM (FAST, best for free tier)
-  // gemini-2.5-flash      → 20 RPD, 5 RPM  (better quality, slower)
-  // Total: 40 analyses/day on free tier across both models
-  const models = ['gemini-2.5-flash-lite', 'gemini-2.5-flash'];
-  const errors = [];
-
-  for (const model of models) {
-    try {
-      const text = await callGemini(apiKey, model, stock);
-      const json = extractJSON(text);
-      if (json) return new Response(JSON.stringify(json), { status: 200, headers: { 'Content-Type': 'application/json' } });
-      return new Response(JSON.stringify({ stockName: stock, rawAnalysis: text, verdict: 'Hold' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    } catch (err) {
-      errors.push(`${model}: ${err.name === 'AbortError' ? 'timed out' : err.message}`);
+  try {
+    if (req.method !== 'POST') {
+      return new Response(JSON.stringify({ error: 'POST only' }), { status: 405, headers: H });
     }
-  }
 
-  return new Response(JSON.stringify({ error: `Failed: ${errors.join(' | ')}` }), { status: 502, headers: { 'Content-Type': 'application/json' } });
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return new Response(JSON.stringify({ error: 'GEMINI_API_KEY not set' }), { status: 500, headers: H });
+    }
+
+    let body;
+    try { body = await req.json(); } catch {
+      return new Response(JSON.stringify({ error: 'Invalid body' }), { status: 400, headers: H });
+    }
+
+    const stock = body?.stock?.trim();
+    if (!stock) {
+      return new Response(JSON.stringify({ error: 'Stock name required' }), { status: 400, headers: H });
+    }
+
+    // Free tier quotas (separate per model, reset daily):
+    // gemini-2.5-flash-lite → 20 RPD, 10 RPM (FAST, best for free tier)
+    // gemini-2.5-flash      → 20 RPD, 5 RPM  (better quality, slower)
+    // Total: 40 analyses/day on free tier across both models
+    const models = ['gemini-2.5-flash-lite', 'gemini-2.5-flash'];
+    const errors = [];
+
+    for (const model of models) {
+      try {
+        const text = await callGemini(apiKey, model, stock);
+        const json = extractJSON(text);
+        if (json) return new Response(JSON.stringify(json), { status: 200, headers: H });
+        return new Response(JSON.stringify({ stockName: stock, rawAnalysis: text, verdict: 'Hold' }), { status: 200, headers: H });
+      } catch (err) {
+        errors.push(`${model}: ${err.name === 'AbortError' ? 'timed out' : err.message}`);
+      }
+    }
+
+    return new Response(JSON.stringify({ error: `Failed: ${errors.join(' | ')}` }), { status: 502, headers: H });
+
+  } catch (e) {
+    // Catch-all: NEVER return non-JSON
+    return new Response(JSON.stringify({ error: `Unexpected error: ${e.message}` }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
 }
