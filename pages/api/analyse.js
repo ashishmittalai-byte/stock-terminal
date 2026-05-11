@@ -1,154 +1,240 @@
-// pages/api/analyse.js — V3.1 Fixed
-export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY not set." });
-  const { stockQuery } = req.body;
-  if (!stockQuery?.trim()) return res.status(400).json({ error: "Missing stockQuery." });
+// pages/api/analyse.js
+// ──────────────────────────────────────────────────────────────
+// Stock Analysis API — calls Gemini with Google Search grounding
+//
+// KEY FIX: Google Search grounding is INCOMPATIBLE with
+// responseMimeType: "application/json" (returns 400).
+// Instead we ask Gemini to return JSON in the prompt and
+// extract it from the text response.
+//
+// Uses gemini-2.5-flash (stable) with v1beta endpoint.
+// ──────────────────────────────────────────────────────────────
 
-  const prompt = `You are an elite Indian equity research analyst. Analyse: ${stockQuery.trim()}
+const API_KEY = process.env.GEMINI_API_KEY;
 
-Return ONLY valid JSON with ALL these fields. Use your most recent knowledge of this stock. If unavailable use null.
+// Models to try in order (first that succeeds wins)
+const MODELS = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+];
+
+const SYSTEM_PROMPT = `You are an expert Indian equity analyst covering all BSE and NSE listed stocks.
+When the user gives a stock name or ticker, use Google Search to find the LATEST real-time data and return a SINGLE JSON object (no markdown, no backticks, just raw JSON) with this exact structure:
 
 {
   "stockName": "Full company name",
-  "ticker": "NSE ticker",
-  "exchange": "NSE or BSE",
-  "sector": "Sector",
-  "industry": "Industry",
-  "currentPrice": number,
-  "currency": "INR",
-  "dayChange": number,
-  "dayHigh": number,
-  "dayLow": number,
-  "open": number,
-  "prevClose": number,
-  "fiftyTwoWeekHigh": number,
-  "fiftyTwoWeekLow": number,
-  "volume": number,
-  "avgVolume": number,
-  "marketCap": number,
-  "marketCapLabel": "formatted string like 1,23,456 Cr",
-  "pe": number or null,
-  "forwardPe": number or null,
-  "pb": number or null,
-  "ps": number or null,
-  "evToEbitda": number or null,
-  "eps": number or null,
-  "dividendYield": number or null,
-  "roe": number or null,
-  "roce": number or null,
-  "roa": number or null,
-  "debtToEquity": number or null,
-  "currentRatio": number or null,
-  "interestCoverage": number or null,
-  "bookValue": number or null,
-  "faceValue": number or null,
-  "promoterHolding": number or null,
-  "promoterHoldingChange": number or null,
-  "fiiHolding": number or null,
-  "fiiHoldingChange": number or null,
-  "diiHolding": number or null,
-  "diiHoldingChange": number or null,
-  "publicHolding": number or null,
-  "pledgedShares": number or null,
-  "revenueGrowthYoY": number or null,
-  "revenueGrowth3Y": number or null,
-  "profitGrowthYoY": number or null,
-  "profitGrowth3Y": number or null,
-  "salesGrowth5Y": number or null,
-  "profitGrowth5Y": number or null,
-  "operatingMargin": number or null,
-  "netMargin": number or null,
-  "freeCashFlow": number or null,
-  "freeCashFlowYield": number or null,
-  "peg": number or null,
-  "beta": number or null,
-  "sma20": number or null,
-  "sma50": number or null,
-  "sma200": number or null,
-  "historicalPrices": [50 recent daily closing prices oldest first as numbers],
-  "historicalHighs": [50 daily highs as numbers],
-  "historicalLows": [50 daily lows as numbers],
-  "historicalOpens": [50 daily opens as numbers],
-  "historicalVolumes": [50 daily volumes as numbers],
-  "intrinsicValueEstimate": number or null,
-  "grahamNumber": number or null,
-  "analystConsensus": "Strong Buy" or "Buy" or "Hold" or "Sell" or "Strong Sell" or null,
-  "analystTargetPrice": number or null,
-  "analystCount": number or null,
-  "recentNews": [
-    {"headline": "news headline 1", "summary": "1-2 sentence summary", "sentiment": "positive", "date": "2025-05-10", "source": "ET Markets"},
-    {"headline": "news headline 2", "summary": "summary", "sentiment": "negative", "date": "2025-05-09", "source": "Moneycontrol"},
-    {"headline": "news headline 3", "summary": "summary", "sentiment": "neutral", "date": "2025-05-08", "source": "Livemint"},
-    {"headline": "news headline 4", "summary": "summary", "sentiment": "positive", "date": "2025-05-07", "source": "CNBCTV18"},
-    {"headline": "news headline 5", "summary": "summary", "sentiment": "neutral", "date": "2025-05-06", "source": "Business Standard"}
+  "ticker": "NSE ticker symbol",
+  "currentPrice": 1234.56,
+  "change": -12.30,
+  "changePercent": -0.99,
+  "technicalIndicators": [
+    {"name": "RSI (14)", "value": 58.3, "signal": "Neutral"},
+    {"name": "MACD", "value": 12.5, "signal": "Bullish"},
+    {"name": "Bollinger Bands", "value": "Near Upper", "signal": "Bearish"},
+    {"name": "Stochastic RSI", "value": 0.72, "signal": "Neutral"},
+    {"name": "ATR (14)", "value": 45.2, "signal": "Neutral"},
+    {"name": "SMA 20", "value": 1220.0, "signal": "Bullish"},
+    {"name": "SMA 50", "value": 1180.0, "signal": "Bullish"},
+    {"name": "SMA 200", "value": 1100.0, "signal": "Bullish"},
+    {"name": "Volume Ratio", "value": 1.3, "signal": "Bullish"},
+    {"name": "52-Week Range", "value": "1050 - 1400", "signal": "Neutral"}
   ],
-  "smartMoneySignals": "string about recent bulk deals, block deals, insider buying/selling, FII/DII activity for this stock",
-  "keyRisks": ["risk 1", "risk 2", "risk 3"],
-  "keyCatalysts": ["catalyst 1", "catalyst 2", "catalyst 3"],
-  "peerComparison": [
-    {"name": "Peer Company 1", "pe": number, "roe": number, "marketCap": number},
-    {"name": "Peer Company 2", "pe": number, "roe": number, "marketCap": number},
-    {"name": "Peer Company 3", "pe": number, "roe": number, "marketCap": number}
+  "candlestickPatterns": [
+    {"name": "Pattern name", "signal": "Bullish/Bearish"}
   ],
-  "businessDescription": "2-3 sentence company overview",
-  "competitiveAdvantage": "1-2 sentence moat description",
-  "managementQuality": "Good/Average/Poor with brief reason"
+  "fundamentals": {
+    "P/E": 25.4,
+    "P/B": 4.2,
+    "EPS": 48.7,
+    "PEG": 1.2,
+    "ROE": "18.5%",
+    "ROCE": "22.1%",
+    "D/E": 0.3,
+    "Operating Margin": "24.5%",
+    "Net Margin": "16.2%",
+    "Revenue Growth (YoY)": "12%",
+    "Profit Growth (YoY)": "8%",
+    "FCF Yield": "3.2%"
+  },
+  "shareholding": {
+    "promoter": 52.3,
+    "fii": 18.7,
+    "dii": 14.2,
+    "public": 14.8
+  },
+  "smartMoney": [
+    "Recent bulk deal: XYZ bought 2M shares",
+    "FII net buyers last 5 sessions"
+  ],
+  "news": [
+    {"headline": "Headline text", "source": "Source name", "date": "May 2026"},
+    {"headline": "Another headline", "source": "Source", "date": "May 2026"}
+  ],
+  "risks": [
+    "Key risk factor 1",
+    "Key risk factor 2"
+  ],
+  "catalysts": [
+    "Positive catalyst 1",
+    "Positive catalyst 2"
+  ],
+  "strategies": [
+    {"name": "Swing Trade", "description": "Buy above X with SL at Y, target Z"},
+    {"name": "Long Term", "description": "Accumulate on dips near SMA 200"}
+  ],
+  "researchLinks": [
+    {"title": "Screener.in", "url": "https://www.screener.in/company/TICKER/"},
+    {"title": "Trendlyne", "url": "https://trendlyne.com/equity/TICKER/"},
+    {"title": "Tickertape", "url": "https://www.tickertape.in/stocks/TICKER"}
+  ],
+  "technicalScore": 65,
+  "fundamentalScore": 72,
+  "compositeScore": 69,
+  "verdict": "Buy"
 }
 
-CRITICAL: historicalPrices MUST have exactly 50 numbers. recentNews MUST have 5 items with all fields filled. All number fields must be actual numbers not strings.`;
+CRITICAL RULES:
+1. Use Google Search to get REAL, CURRENT prices and data — never estimate or use stale data.
+2. Return ONLY the JSON object. No markdown, no backticks, no explanation before/after.
+3. All number fields must be actual numbers, not strings (except where shown as strings above).
+4. The verdict must be exactly one of: "Strong Buy", "Buy", "Hold", "Sell", "Strong Sell".
+5. Scores are 0-100 integers. Composite = Technical×0.45 + Fundamental×0.55.
+6. Fill ALL fields — if data is unavailable, use reasonable estimates and note "est." in the value.
+7. Include at least 3 recent news headlines from the last few weeks.`;
 
-  try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 8192,
-          responseMimeType: "application/json"
-        },
-      }),
-    });
+// ─── Extract JSON from potentially messy Gemini response ───
+function extractJSON(text) {
+  if (!text) return null;
 
-    if (!response.ok) {
-      const errBody = await response.text();
-      console.error("Gemini error:", response.status, errBody);
-      if (response.status === 429) return res.status(429).json({ error: "Rate limit. Wait 1 min (5/min) or check daily quota (20/day)." });
-      if (response.status === 403) return res.status(403).json({ error: "API key invalid." });
-      return res.status(502).json({ error: `Gemini API error (${response.status}).` });
-    }
+  // Remove markdown code fences
+  let cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
 
-    const data = await response.json();
-    let text = "";
-    if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-      text = (data.candidates[0].content.parts || [])
-        .filter(p => p.text)
-        .map(p => p.text)
-        .join("\n")
-        .trim();
-    }
+  // Try direct parse first
+  try { return JSON.parse(cleaned); } catch {}
 
-    if (!text) return res.status(422).json({ error: "Empty response from Gemini." });
-
-    // Clean and parse JSON
-    let jsonStr = text.replace(/```json|```/g, "").trim();
-    const match = jsonStr.match(/\{[\s\S]*\}/);
-    if (match) jsonStr = match[0];
-
-    let parsed;
-    try {
-      parsed = JSON.parse(jsonStr);
-    } catch {
-      return res.status(422).json({ error: "Could not parse response. Try exact ticker like SBIN, RELIANCE, BAJFINANCE." });
-    }
-
-    return res.status(200).json(parsed);
-  } catch (err) {
-    console.error("Server error:", err);
-    return res.status(500).json({ error: "Internal server error." });
+  // Find first { ... last }
+  const first = cleaned.indexOf('{');
+  const last = cleaned.lastIndexOf('}');
+  if (first !== -1 && last > first) {
+    try { return JSON.parse(cleaned.substring(first, last + 1)); } catch {}
   }
+
+  // Try to fix common issues: trailing commas
+  try {
+    const fixed = cleaned
+      .substring(first, last + 1)
+      .replace(/,\s*}/g, '}')
+      .replace(/,\s*]/g, ']');
+    return JSON.parse(fixed);
+  } catch {}
+
+  return null;
+}
+
+// ─── Call Gemini API ───
+async function callGemini(model, stockQuery) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${API_KEY}`;
+
+  const body = {
+    system_instruction: {
+      parts: [{ text: SYSTEM_PROMPT }],
+    },
+    contents: [
+      {
+        role: 'user',
+        parts: [{ text: `Analyse this Indian stock: ${stockQuery}` }],
+      },
+    ],
+    tools: [{ google_search: {} }],
+    // NOTE: Do NOT set generationConfig.responseMimeType with google_search tool
+    // They are incompatible and cause 400 errors.
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 8192,
+    },
+  };
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`Gemini ${model} returned ${res.status}: ${errText.substring(0, 200)}`);
+  }
+
+  const data = await res.json();
+
+  // Extract text from response
+  const candidate = data.candidates?.[0];
+  if (!candidate) throw new Error('No candidates in Gemini response');
+
+  // Check for safety blocks
+  if (candidate.finishReason === 'SAFETY') {
+    throw new Error('Response blocked by safety filters');
+  }
+
+  const parts = candidate.content?.parts || [];
+  const textParts = parts.filter((p) => p.text).map((p) => p.text);
+  const fullText = textParts.join('\n');
+
+  if (!fullText || fullText.trim() === '```' || fullText.trim() === '') {
+    throw new Error('Empty response from Gemini (known grounding issue)');
+  }
+
+  return fullText;
+}
+
+// ─── API Handler ───
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  if (!API_KEY) {
+    return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
+  }
+
+  const { stock } = req.body || {};
+  if (!stock || typeof stock !== 'string' || stock.trim().length === 0) {
+    return res.status(400).json({ error: 'Please provide a stock name' });
+  }
+
+  const stockQuery = stock.trim();
+  let lastError = null;
+
+  // Try each model in order
+  for (const model of MODELS) {
+    try {
+      console.log(`[analyse] Trying ${model} for "${stockQuery}"...`);
+      const text = await callGemini(model, stockQuery);
+      const parsed = extractJSON(text);
+
+      if (parsed) {
+        console.log(`[analyse] Success with ${model}`);
+        return res.status(200).json(parsed);
+      }
+
+      // If JSON parsing fails, return the raw text wrapped in a basic structure
+      console.warn(`[analyse] ${model} returned non-JSON, wrapping raw text`);
+      return res.status(200).json({
+        stockName: stockQuery,
+        rawAnalysis: text,
+        verdict: 'Hold',
+        error: null,
+      });
+    } catch (err) {
+      console.error(`[analyse] ${model} failed:`, err.message);
+      lastError = err;
+      // Continue to next model
+    }
+  }
+
+  // All models failed
+  return res.status(502).json({
+    error: `Analysis failed after trying all models. Last error: ${lastError?.message || 'Unknown'}`,
+  });
 }
