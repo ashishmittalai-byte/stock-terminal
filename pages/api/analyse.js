@@ -109,7 +109,7 @@ export default async function handler(req) {
     // gemini-2.5-flash-lite  → 20 RPD, 10 RPM
     // gemma-3-27b-it         → 14,400 RPD (no live prices)
     // Total: ~15,670 free analyses/day!
-    const models = ['gemini-3.1-flash-lite', 'gemini-3.1-flash', 'gemini-2.5-flash-lite', 'gemma-3-27b-it'];
+    const models = ['gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemini-2.5-flash'];
     const errors = [];
 
     for (const model of models) {
