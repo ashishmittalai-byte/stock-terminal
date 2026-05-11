@@ -169,10 +169,63 @@ export default function Home() {
   const [screenLoading, setScreenLoading] = useState(false);
   const [screenData, setScreenData] = useState(null);
   const [screenError, setScreenError] = useState('');
+  const [savedStrategies, setSavedStrategies] = useState([]);
+  const [screenHistory, setScreenHistory] = useState([]);
+  const [expandedCharts, setExpandedCharts] = useState({});
+  const [showHistory, setShowHistory] = useState(false);
   const resultsRef = useRef(null);
   const suggestRef = useRef(null);
   const debounceRef = useRef(null);
   const screenRef = useRef(null);
+
+  // Load saved strategies & history from localStorage
+  useEffect(() => {
+    try { setSavedStrategies(JSON.parse(localStorage.getItem('savedStrategies') || '[]')); } catch {}
+    try { setScreenHistory(JSON.parse(localStorage.getItem('screenHistory') || '[]')); } catch {}
+  }, []);
+
+  const toggleSavedStrategy = (label) => {
+    const updated = savedStrategies.includes(label)
+      ? savedStrategies.filter(s => s !== label)
+      : [...savedStrategies, label];
+    setSavedStrategies(updated);
+    localStorage.setItem('savedStrategies', JSON.stringify(updated));
+  };
+
+  const addToHistory = (strategy, data) => {
+    const entry = { strategy, resultCount: data.results?.length || 0, model: data._model, time: new Date().toLocaleString('en-IN'), topStocks: (data.results || []).slice(0, 3).map(r => r.ticker || r.stockName) };
+    const updated = [entry, ...screenHistory.slice(0, 19)]; // keep last 20
+    setScreenHistory(updated);
+    localStorage.setItem('screenHistory', JSON.stringify(updated));
+  };
+
+  const toggleChart = (idx) => setExpandedCharts(prev => ({ ...prev, [idx]: !prev[idx] }));
+
+  // Export results to CSV
+  const exportCSV = () => {
+    if (!screenData?.results?.length) return;
+    const headers = ['Stock', 'Ticker', 'Sector', 'Price', 'Change%', 'Signal', 'Strength', 'Pattern', 'Breakout', 'Target', 'StopLoss', 'R:R', 'Explanation'];
+    const rows = screenData.results.map(r => {
+      const risk = r.currentPrice && r.stopLoss ? Math.abs(r.currentPrice - r.stopLoss) : 0;
+      const reward = r.targetPrice && r.currentPrice ? Math.abs(r.targetPrice - r.currentPrice) : 0;
+      const rr = risk > 0 ? (reward / risk).toFixed(1) : '-';
+      return [r.stockName, r.ticker, r.sector, r.currentPrice, r.changePercent, r.signal, r.strength, r.pattern, r.breakoutLevel, r.targetPrice, r.stopLoss, rr, `"${(r.explanation || '').replace(/"/g, "'')}"`].join(',');
+    });
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `screener_${screenData.strategy || 'results'}_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Calculate Risk:Reward ratio
+  const calcRR = (entry, sl, target) => {
+    if (!entry || !sl || !target) return null;
+    const risk = Math.abs(entry - sl);
+    const reward = Math.abs(target - entry);
+    if (risk === 0) return null;
+    return { risk: risk.toFixed(1), reward: reward.toFixed(1), ratio: (reward / risk).toFixed(1), riskPct: ((risk / entry) * 100).toFixed(1), rewardPct: ((reward / entry) * 100).toFixed(1) };
+  };
 
   useEffect(() => {
     try { const w = JSON.parse(localStorage.getItem('stockWatchlist') || '[]'); setWatchlist(w); } catch {}
@@ -316,6 +369,8 @@ export default function Home() {
       }
       if (!res.ok || json.error) throw new Error(json.error || `Error: ${res.status}`);
       setScreenData(json);
+      addToHistory(s, json);
+      setExpandedCharts({});
       setTimeout(() => screenRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
     } catch (e) {
       setScreenError(e.message || 'Screener failed');
@@ -1209,6 +1264,58 @@ export default function Home() {
           {/* Pre-built Strategies */}
           {!screenData && !screenLoading && (
             <div style={{ marginBottom:32 }}>
+
+              {/* Saved Strategies */}
+              {savedStrategies.length > 0 && (
+                <div style={{ marginBottom:20 }}>
+                  <p style={{ fontSize:11, color:'var(--text-muted)', textAlign:'center', marginBottom:10, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.1em' }}>
+                    ⭐ Your Saved Strategies
+                  </p>
+                  <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:8 }}>
+                    {savedStrategies.map((label, i) => {
+                      const strat = STRATEGIES.find(s => s.label === label);
+                      return (
+                        <button key={i} className="strat-chip" style={{ borderColor:'rgba(79,70,229,0.2)', background:'rgba(79,70,229,0.03)' }}
+                          onClick={() => { setScreenStrategy(label); runScreener(strat?.query || label); }}>
+                          <span>{strat?.icon || '⭐'}</span> {label}
+                          <span onClick={e => { e.stopPropagation(); toggleSavedStrategy(label); }} style={{ color:'var(--accent-red)', cursor:'pointer', fontSize:14, marginLeft:2 }}>×</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* History Toggle */}
+              {screenHistory.length > 0 && (
+                <div style={{ textAlign:'center', marginBottom:16 }}>
+                  <button className="btn-ghost" onClick={() => setShowHistory(!showHistory)}>
+                    🕐 History ({screenHistory.length}) {showHistory ? '▲' : '▼'}
+                  </button>
+                </div>
+              )}
+
+              {/* History Panel */}
+              {showHistory && screenHistory.length > 0 && (
+                <div style={{ maxWidth:600, margin:'0 auto 20px', background:'#ffffff', border:'1px solid rgba(0,0,0,0.06)', borderRadius:12, overflow:'hidden', boxShadow:'0 1px 3px rgba(0,0,0,0.04)' }}>
+                  {screenHistory.map((h, i) => (
+                    <div key={i} style={{ padding:'10px 16px', borderBottom:'1px solid rgba(0,0,0,0.04)', display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', transition:'background 0.15s' }}
+                      onClick={() => { setScreenStrategy(h.strategy); runScreener(h.strategy); setShowHistory(false); }}
+                      onMouseOver={e => e.currentTarget.style.background='#f8f9fc'}
+                      onMouseOut={e => e.currentTarget.style.background='transparent'}>
+                      <div>
+                        <p style={{ fontSize:13, fontWeight:600, color:'var(--text-primary)' }}>{h.strategy}</p>
+                        <p style={{ fontSize:11, color:'var(--text-muted)' }}>
+                          {h.resultCount} stocks · {h.model} · {h.time}
+                          {h.topStocks?.length > 0 && ` · ${h.topStocks.join(', ')}`}
+                        </p>
+                      </div>
+                      <span style={{ fontSize:12, color:'var(--accent-blue)' }}>Re-run →</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <p style={{ fontSize:11, color:'var(--text-muted)', textAlign:'center', marginBottom:14, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.1em' }}>
                 Pre-built Strategies
               </p>
@@ -1216,6 +1323,11 @@ export default function Home() {
                 {STRATEGIES.map((s, i) => (
                   <button key={i} className="strat-chip" onClick={() => { setScreenStrategy(s.label); runScreener(s.query); }}>
                     <span>{s.icon}</span> {s.label}
+                    <span onClick={e => { e.stopPropagation(); toggleSavedStrategy(s.label); }}
+                      style={{ fontSize:12, cursor:'pointer', color: savedStrategies.includes(s.label) ? '#d97706' : 'var(--text-muted)', marginLeft:2 }}
+                      title={savedStrategies.includes(s.label) ? 'Remove from saved' : 'Save strategy'}>
+                      {savedStrategies.includes(s.label) ? '★' : '☆'}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -1267,9 +1379,17 @@ export default function Home() {
                   )}
                 </div>
                 {screenData.results && (
-                  <p style={{ fontSize:13, fontWeight:600, color:'var(--accent-blue)', marginTop:12 }}>
-                    {screenData.results.length} stock{screenData.results.length !== 1 ? 's' : ''} found
-                  </p>
+                  <div style={{ display:'flex', alignItems:'center', gap:12, marginTop:12, flexWrap:'wrap' }}>
+                    <p style={{ fontSize:13, fontWeight:600, color:'var(--accent-blue)' }}>
+                      {screenData.results.length} stock{screenData.results.length !== 1 ? 's' : ''} found
+                    </p>
+                    <button className="btn-ghost" style={{ fontSize:11, padding:'6px 12px' }} onClick={exportCSV}>
+                      📥 Export CSV
+                    </button>
+                    <button className="btn-ghost" style={{ fontSize:11, padding:'6px 12px' }} onClick={() => { setScreenData(null); setScreenError(''); }}>
+                      🔄 New Scan
+                    </button>
+                  </div>
                 )}
               </Card>
 
@@ -1360,6 +1480,43 @@ export default function Home() {
                           )}
                         </div>
                       )}
+
+                      {/* Risk:Reward Calculator */}
+                      {(() => {
+                        const rr = calcRR(r.currentPrice, r.stopLoss, r.targetPrice);
+                        return rr ? (
+                          <div style={{ padding:'10px 14px', borderRadius:8, background: parseFloat(rr.ratio) >= 2 ? 'rgba(22,163,74,0.04)' : parseFloat(rr.ratio) >= 1 ? 'rgba(217,119,6,0.04)' : 'rgba(220,38,38,0.04)', border: `1px solid ${parseFloat(rr.ratio) >= 2 ? 'rgba(22,163,74,0.12)' : parseFloat(rr.ratio) >= 1 ? 'rgba(217,119,6,0.12)' : 'rgba(220,38,38,0.12)'}`, marginBottom:12 }}>
+                            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                              <span style={{ fontSize:11, fontWeight:600, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.06em' }}>Risk : Reward</span>
+                              <span style={{ fontSize:16, fontWeight:700, fontFamily:"'JetBrains Mono',monospace", color: parseFloat(rr.ratio) >= 2 ? '#16a34a' : parseFloat(rr.ratio) >= 1 ? '#d97706' : '#dc2626' }}>
+                                1 : {rr.ratio}
+                              </span>
+                            </div>
+                            <div style={{ display:'flex', gap:16, marginTop:6 }}>
+                              <span style={{ fontSize:11, color:'#dc2626' }}>Risk: ₹{rr.risk} ({rr.riskPct}%)</span>
+                              <span style={{ fontSize:11, color:'#16a34a' }}>Reward: ₹{rr.reward} ({rr.rewardPct}%)</span>
+                            </div>
+                          </div>
+                        ) : null;
+                      })()}
+
+                      {/* TradingView Chart Toggle */}
+                      <div style={{ marginBottom:12 }}>
+                        <button className="btn-ghost" style={{ width:'100%', justifyContent:'center', fontSize:11, padding:'6px' }}
+                          onClick={() => toggleChart(i)}>
+                          {expandedCharts[i] ? '▲ Hide Chart' : '📈 Show Live Chart'}
+                        </button>
+                        {expandedCharts[i] && (
+                          <div style={{ marginTop:8, borderRadius:8, overflow:'hidden', border:'1px solid rgba(0,0,0,0.06)' }}>
+                            <iframe
+                              src={`https://s.tradingview.com/widgetembed/?frameElementId=tv_${i}&symbol=NSE%3A${encodeURIComponent(r.ticker || '')}&interval=D&hidesidebar=1&symboledit=0&saveimage=0&toolbarbg=f1f3f6&theme=light&style=1&timezone=Asia%2FKolkata&locale=en&withdateranges=0&hide_top_toolbar=0&hide_side_toolbar=1&allow_symbol_change=0`}
+                              style={{ width:'100%', height:300, border:'none' }}
+                              loading="lazy"
+                              title={`${r.ticker} chart`}
+                            />
+                          </div>
+                        )}
+                      </div>
 
                       {/* Action Buttons */}
                       <div style={{ display:'flex', gap:8 }}>
