@@ -1,70 +1,27 @@
-// pages/api/analyse.js
-// ─────────────────────────────────────────────────────────────
-// Optimized for Vercel Hobby 10s limit.
-// Lean prompt → Gemini responds in 4-7 seconds.
-// ─────────────────────────────────────────────────────────────
+// pages/api/analyse.js — Edge Runtime (30s timeout on Hobby)
+export const config = { runtime: 'edge' };
 
-const API_KEY = process.env.GEMINI_API_KEY;
-
-// Compact prompt — asks for key indicators, not exhaustive list
-const PROMPT = `Expert Indian equity analyst. Given a stock, return ONLY raw JSON (no markdown/backticks).
-
+const PROMPT = `Expert Indian equity analyst. Return ONLY raw JSON (no markdown/backticks).
 {
   "stockName":string,"ticker":string,"currentPrice":number,"change":number,"changePercent":number,
-  "open":number,"dayHigh":number,"dayLow":number,"previousClose":number,"volume":string,"weekHigh52":number,"weekLow52":number,"marketCap":string,
-
-  "movingAverages":[
-    {"name":"SMA 20","value":n,"signal":"Buy/Sell/Neutral"},
-    {"name":"SMA 50","value":n,"signal":"..."},
-    {"name":"SMA 100","value":n,"signal":"..."},
-    {"name":"SMA 200","value":n,"signal":"..."},
-    {"name":"EMA 9","value":n,"signal":"..."},
-    {"name":"EMA 21","value":n,"signal":"..."},
-    {"name":"EMA 50","value":n,"signal":"..."},
-    {"name":"EMA 200","value":n,"signal":"..."}
-  ],
-  "maSummary":"X Buy, Y Sell. Golden/Death Cross if active.",
-
-  "indicators":[
-    {"name":"RSI (14)","value":n,"signal":"..."},
-    {"name":"MACD","value":n,"signal":"..."},
-    {"name":"MACD Signal","value":n,"signal":"..."},
-    {"name":"MACD Histogram","value":n,"signal":"..."},
-    {"name":"Stochastic %K","value":n,"signal":"..."},
-    {"name":"Williams %R","value":n,"signal":"..."},
-    {"name":"CCI (20)","value":n,"signal":"..."},
-    {"name":"ADX (14)","value":n,"signal":"..."},
-    {"name":"Supertrend","value":n,"signal":"..."},
-    {"name":"Parabolic SAR","value":n,"signal":"..."},
-    {"name":"VWAP","value":n,"signal":"..."},
-    {"name":"Bollinger Upper","value":n,"signal":"..."},
-    {"name":"Bollinger Lower","value":n,"signal":"..."},
-    {"name":"ATR (14)","value":n,"signal":"..."},
-    {"name":"OBV","value":"...","signal":"..."},
-    {"name":"Volume Ratio","value":n,"signal":"..."},
-    {"name":"MFI","value":n,"signal":"..."},
-    {"name":"ROC","value":n,"signal":"..."}
-  ],
-
-  "chartPattern":{"pattern":string,"implication":"Bullish/Bearish/Neutral","breakoutLevel":n,"targetPrice":n,"stopLoss":n,"description":"2 sentences","additionalPatterns":[string]},
-
+  "open":number,"dayHigh":number,"dayLow":number,"previousClose":number,"volume":string,
+  "weekHigh52":number,"weekLow52":number,"marketCap":string,
+  "movingAverages":[{"name":"SMA 20/50/100/200 + EMA 9/21/50/200","value":number,"signal":"Buy/Sell/Neutral"}],
+  "maSummary":"X Buy, Y Sell. Golden/Death Cross status.",
+  "indicators":[{"name":"RSI/MACD/MACD Signal/Histogram/Stochastic/Williams%R/CCI/ADX/Supertrend/SAR/VWAP/BollingerUpper/BollingerLower/ATR/OBV/VolumeRatio/MFI/ROC","value":number,"signal":string}],
+  "chartPattern":{"pattern":string,"implication":"Bullish/Bearish/Neutral","breakoutLevel":number,"targetPrice":number,"stopLoss":number,"description":string,"additionalPatterns":[string]},
   "supportResistance":{"support1":n,"support2":n,"support3":n,"resistance1":n,"resistance2":n,"resistance3":n,"pivotPoint":n},
-
   "candlestickPatterns":[{"name":string,"signal":"Bullish/Bearish","reliability":"High/Medium/Low"}],
-
   "fundamentals":{"P/E":n,"P/B":n,"EPS":n,"ROE":"%","ROCE":"%","D/E":n,"Net Margin":"%","Revenue Growth":"%","Profit Growth":"%","Dividend Yield":"%","Book Value":n,"EV/EBITDA":n},
-
   "shareholding":{"promoter":n,"fii":n,"dii":n,"public":n},
-  "smartMoney":[string],
-  "news":[{"headline":string,"source":string,"date":string}],
+  "smartMoney":[string],"news":[{"headline":string,"source":string,"date":string}],
   "risks":[string],"catalysts":[string],
   "strategies":[{"name":string,"description":string}],
   "researchLinks":[{"title":string,"url":string}],
   "technicalScore":0-100,"fundamentalScore":0-100,"compositeScore":0-100,
-  "verdict":"Strong Buy/Buy/Hold/Sell/Strong Sell",
-  "overallSummary":"2-3 sentence summary"
+  "verdict":"Strong Buy/Buy/Hold/Sell/Strong Sell","overallSummary":string
 }
-Numbers must be JSON numbers. MA signal: Buy if price>MA, Sell if price<MA. Fill every field. Include current daily chart pattern.`;
+Return 8 MAs, 18 indicators, chart pattern, S/R levels, candlestick patterns, fundamentals, news, verdict. All numbers as JSON numbers. Fill every field.`;
 
 function extractJSON(text) {
   if (!text) return null;
@@ -78,68 +35,68 @@ function extractJSON(text) {
   return null;
 }
 
-async function callGemini(model, stock) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${API_KEY}`;
-
+async function callGemini(apiKey, model, stock) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 9000);
-
+  const timer = setTimeout(() => ctrl.abort(), 25000);
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: ctrl.signal,
       body: JSON.stringify({
         system_instruction: { parts: [{ text: PROMPT }] },
         contents: [{ role: 'user', parts: [{ text: `Analyse: ${stock}` }] }],
         generationConfig: { temperature: 0.3, maxOutputTokens: 4096 },
       }),
-      signal: ctrl.signal,
     });
-
     if (!res.ok) {
       const e = await res.text().catch(() => '');
-      if (res.status === 429) throw new Error(`RATE_LIMIT:${model}`);
-      throw new Error(`${model}: HTTP ${res.status} - ${e.substring(0, 150)}`);
+      if (res.status === 429) throw new Error(`RATE_LIMIT`);
+      throw new Error(`HTTP ${res.status}: ${e.substring(0, 150)}`);
     }
-
     const data = await res.json();
     const cand = data.candidates?.[0];
-    if (!cand?.content?.parts) throw new Error(`${model}: No content`);
+    if (!cand?.content?.parts) throw new Error('No content');
     const text = cand.content.parts.filter(p => p.text).map(p => p.text).join('\n');
-    if (!text || text.trim().length < 30) throw new Error(`${model}: Empty`);
+    if (!text || text.trim().length < 30) throw new Error('Empty response');
     return text;
-  } finally {
-    clearTimeout(timer);
-  }
+  } finally { clearTimeout(timer); }
 }
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
-  if (!API_KEY) return res.status(500).json({ error: 'GEMINI_API_KEY not set' });
+export default async function handler(req) {
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'POST only' }), { status: 405, headers: { 'Content-Type': 'application/json' } });
+  }
 
-  const { stock } = req.body || {};
-  if (!stock?.trim()) return res.status(400).json({ error: 'Stock name required' });
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return new Response(JSON.stringify({ error: 'GEMINI_API_KEY not set' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
 
-  // gemini-2.0-flash is deprecated for new users (404).
-  // Use 2.5-flash (primary) and 2.5-flash-lite (fast fallback).
+  let body;
+  try { body = await req.json(); } catch {
+    return new Response(JSON.stringify({ error: 'Invalid body' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+  }
+
+  const stock = body?.stock?.trim();
+  if (!stock) {
+    return new Response(JSON.stringify({ error: 'Stock name required' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+  }
+
   const models = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
   const errors = [];
-  let rateLimited = false;
 
   for (const model of models) {
     try {
-      const text = await callGemini(model, stock.trim());
+      const text = await callGemini(apiKey, model, stock);
       const json = extractJSON(text);
-      if (json) return res.status(200).json(json);
-      return res.status(200).json({ stockName: stock.trim(), rawAnalysis: text, verdict: 'Hold' });
+      if (json) return new Response(JSON.stringify(json), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ stockName: stock, rawAnalysis: text, verdict: 'Hold' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     } catch (err) {
-      if (err.message?.startsWith('RATE_LIMIT:')) rateLimited = true;
-      errors.push(err.name === 'AbortError' ? `${model}: timed out` : err.message);
+      errors.push(`${model}: ${err.name === 'AbortError' ? 'timed out' : err.message}`);
     }
   }
 
-  const msg = rateLimited
-    ? 'Rate limit hit. Wait a minute and try again.'
-    : `Failed: ${errors.join(' | ')}`;
-  return res.status(rateLimited ? 429 : 502).json({ error: msg });
+  return new Response(JSON.stringify({ error: `Failed: ${errors.join(' | ')}` }), { status: 502, headers: { 'Content-Type': 'application/json' } });
 }
