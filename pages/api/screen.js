@@ -130,7 +130,7 @@ export default async function handler(req) {
       return new Response(JSON.stringify({ error: 'Strategy required' }), { status: 400, headers: H });
     }
 
-    const models = ['gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemma-4-26b-a4b-it'];
+    const models = ['gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemini-2.5-flash'];
     const errors = [];
 
     for (const model of models) {
