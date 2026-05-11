@@ -103,13 +103,13 @@ export default async function handler(req) {
       return new Response(JSON.stringify({ error: 'Stock name required' }), { status: 400, headers: H });
     }
 
-    // Model waterfall — try best models first, Gemma as unlimited fallback:
-    // gemini-3.1-flash-lite         → 500 RPD (with billing) / ~20 RPD (free)
-    // gemini-3.1-flash-lite-preview → same
-    // gemini-3-flash-preview        → 20 RPD
-    // gemini-2.5-flash-lite         → 20 RPD
-    // gemma-3-27b-it                → 14,400 RPD (no grounding, but never rate-limited!)
-    const models = ['gemini-3.1-flash-lite', 'gemini-3.1-flash-lite-preview', 'gemini-3-flash-preview', 'gemini-2.5-flash-lite', 'gemma-3-27b-it'];
+    // Free tier (no billing needed!) — confirmed May 2026:
+    // gemini-3.1-flash-lite  → 1,000 RPD, 15 RPM ← BEST!
+    // gemini-3.1-flash       → 250 RPD, 10 RPM
+    // gemini-2.5-flash-lite  → 20 RPD, 10 RPM
+    // gemma-3-27b-it         → 14,400 RPD (no live prices)
+    // Total: ~15,670 free analyses/day!
+    const models = ['gemini-3.1-flash-lite', 'gemini-3.1-flash', 'gemini-2.5-flash-lite', 'gemma-3-27b-it'];
     const errors = [];
 
     for (const model of models) {
@@ -117,10 +117,11 @@ export default async function handler(req) {
         const text = await callGemini(apiKey, model, stock);
         const json = extractJSON(text);
         if (json) {
-          json._model = model; // Tag which model was used
+          json._model = model;
+          json._skipped = errors.length > 0 ? errors : undefined;
           return new Response(JSON.stringify(json), { status: 200, headers: H });
         }
-        return new Response(JSON.stringify({ stockName: stock, rawAnalysis: text, verdict: 'Hold', _model: model }), { status: 200, headers: H });
+        return new Response(JSON.stringify({ stockName: stock, rawAnalysis: text, verdict: 'Hold', _model: model, _skipped: errors }), { status: 200, headers: H });
       } catch (err) {
         errors.push(`${model}: ${err.name === 'AbortError' ? 'timed out' : err.message}`);
       }
