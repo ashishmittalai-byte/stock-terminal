@@ -274,16 +274,28 @@ export default function Home() {
   const verdictText = d.verdict || d.compositeVerdict || d.signal || '';
   const vs = getVerdictStyle(verdictText);
 
+  // Technical sections
+  const movingAverages = d.movingAverages || [];
+  const maSummary = d.maSummary || '';
+  const momentumIndicators = d.momentumIndicators || [];
+  const trendIndicators = d.trendIndicators || [];
+  const volatilityIndicators = d.volatilityIndicators || [];
+  const volumeIndicators = d.volumeIndicators || [];
+  const chartPattern = d.chartPattern || null;
+  const supportResistance = d.supportResistance || {};
   const technicals = d.technicalIndicators || d.technicals || [];
+  const candlestickPatterns = d.candlestickPatterns || [];
+
+  // Fundamentals & other
   const fundamentals = d.fundamentals || d.fundamentalMetrics || {};
   const shareholding = d.shareholding || d.shareholdingPattern || {};
   const news = d.news || d.recentNews || [];
   const smartMoney = d.smartMoney || d.smartMoneySignals || [];
   const risks = d.risks || d.keyRisks || [];
   const catalysts = d.catalysts || d.keyCatalysts || [];
-  const candlestickPatterns = d.candlestickPatterns || [];
   const strategies = d.strategies || d.tradingStrategies || [];
   const researchLinks = d.researchLinks || [];
+  const overallSummary = d.overallSummary || '';
 
   const techScore = parseScore(d.technicalScore || d.techScore);
   const fundScore = parseScore(d.fundamentalScore || d.fundScore);
@@ -754,10 +766,158 @@ export default function Home() {
               )}
             </Card>
 
+            {/* Overall Summary */}
+            {overallSummary && (
+              <Card style={{ marginBottom:14, animationDelay:'0.03s' }}>
+                <p style={{ fontSize:14, lineHeight:1.7, color:'var(--text-secondary)' }}>{overallSummary}</p>
+              </Card>
+            )}
+
+            {/* Market Stats Row */}
+            {(d.dayHigh || d.volume || d.weekHigh52) && (
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(130px, 1fr))', gap:8, marginBottom:14 }}>
+                {[
+                  d.open && { l:'Open', v:`₹${d.open}` },
+                  d.dayHigh && { l:'Day High', v:`₹${d.dayHigh}` },
+                  d.dayLow && { l:'Day Low', v:`₹${d.dayLow}` },
+                  d.previousClose && { l:'Prev Close', v:`₹${d.previousClose}` },
+                  d.volume && { l:'Volume', v: typeof d.volume === 'number' ? (d.volume >= 1e7 ? `${(d.volume/1e7).toFixed(1)} Cr` : d.volume >= 1e5 ? `${(d.volume/1e5).toFixed(1)} L` : d.volume.toLocaleString()) : d.volume },
+                  d.weekHigh52 && { l:'52W High', v:`₹${d.weekHigh52}` },
+                  d.weekLow52 && { l:'52W Low', v:`₹${d.weekLow52}` },
+                  d.marketCap && { l:'Market Cap', v: d.marketCap },
+                ].filter(Boolean).map((item, i) => (
+                  <div key={i} className="fund-item">
+                    <span className="fund-label">{item.l}</span>
+                    <span className="mono-value" style={{ fontSize:13 }}>{item.v}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Chart Pattern — full-width prominent card */}
+            {chartPattern && chartPattern.pattern && (
+              <Card title="Current Chart Pattern" icon="📐" accentColor="#7c3aed" style={{ marginBottom:14, animationDelay:'0.05s' }}>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:16, alignItems:'flex-start' }}>
+                  <div style={{ flex:'1 1 300px' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+                      <span style={{ fontSize:20, fontWeight:700, color:'var(--text-primary)' }}>{chartPattern.pattern}</span>
+                      <span style={{
+                        fontSize:11, fontWeight:700, padding:'3px 10px', borderRadius:6,
+                        background: chartPattern.implication === 'Bullish' ? 'rgba(22,163,74,0.08)' : chartPattern.implication === 'Bearish' ? 'rgba(220,38,38,0.08)' : 'rgba(217,119,6,0.08)',
+                        color: chartPattern.implication === 'Bullish' ? '#16a34a' : chartPattern.implication === 'Bearish' ? '#dc2626' : '#d97706',
+                        textTransform:'uppercase', letterSpacing:'0.05em',
+                      }}>{chartPattern.implication}</span>
+                      {chartPattern.timeframe && <span className="label-text">({chartPattern.timeframe})</span>}
+                    </div>
+                    {chartPattern.description && (
+                      <p style={{ fontSize:13, lineHeight:1.65, color:'var(--text-secondary)', marginBottom:12 }}>{chartPattern.description}</p>
+                    )}
+                    {chartPattern.additionalPatterns && chartPattern.additionalPatterns.length > 0 && (
+                      <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                        {chartPattern.additionalPatterns.map((p, i) => (
+                          <span key={i} style={{ fontSize:11, padding:'3px 10px', borderRadius:6, background:'var(--pill-bg)', border:'1px solid var(--pill-border)', color:'var(--text-secondary)', fontWeight:500 }}>{p}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:8, flex:'0 0 auto', minWidth:200 }}>
+                    {[
+                      chartPattern.breakoutLevel && { l:'Breakout', v:`₹${chartPattern.breakoutLevel}`, c:'#4f46e5' },
+                      chartPattern.targetPrice && { l:'Target', v:`₹${chartPattern.targetPrice}`, c:'#16a34a' },
+                      chartPattern.stopLoss && { l:'Stop Loss', v:`₹${chartPattern.stopLoss}`, c:'#dc2626' },
+                      chartPattern.completionPercent && { l:'Completion', v:`${chartPattern.completionPercent}%`, c:'#7c3aed' },
+                    ].filter(Boolean).map((item, i) => (
+                      <div key={i} className="fund-item">
+                        <span className="fund-label">{item.l}</span>
+                        <span className="mono-value" style={{ color:item.c }}>{item.v}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </Card>
+            )}
+
             {/* Grid */}
             <div className="results-grid" style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:14 }}>
 
-              {Array.isArray(technicals) && technicals.length > 0 && (
+              {/* Moving Averages */}
+              {Array.isArray(movingAverages) && movingAverages.length > 0 && (
+                <Card title="Moving Averages" icon="〰️" accentColor="#4f46e5" style={{ animationDelay:'0.06s' }}>
+                  {maSummary && <p style={{ fontSize:13, lineHeight:1.6, color:'var(--text-secondary)', marginBottom:14, padding:'10px 14px', background:'rgba(79,70,229,0.04)', borderRadius:8, borderLeft:'3px solid #4f46e5' }}>{maSummary}</p>}
+                  <div style={{ display:'grid', gap:5 }}>
+                    {movingAverages.map((t, i) => (
+                      <IndicatorPill key={i} label={t.name} value={t.value} signal={t.signal} />
+                    ))}
+                  </div>
+                </Card>
+              )}
+
+              {/* Momentum Indicators */}
+              {Array.isArray(momentumIndicators) && momentumIndicators.length > 0 && (
+                <Card title="Momentum" icon="⚡" accentColor="#d97706" style={{ animationDelay:'0.08s' }}>
+                  <div style={{ display:'grid', gap:5 }}>
+                    {momentumIndicators.map((t, i) => (
+                      <IndicatorPill key={i} label={t.name} value={t.value} signal={t.signal} />
+                    ))}
+                  </div>
+                </Card>
+              )}
+
+              {/* Trend Indicators */}
+              {Array.isArray(trendIndicators) && trendIndicators.length > 0 && (
+                <Card title="Trend" icon="📈" accentColor="#16a34a" style={{ animationDelay:'0.1s' }}>
+                  <div style={{ display:'grid', gap:5 }}>
+                    {trendIndicators.map((t, i) => (
+                      <IndicatorPill key={i} label={t.name} value={t.value} signal={t.signal} />
+                    ))}
+                  </div>
+                </Card>
+              )}
+
+              {/* Volatility Indicators */}
+              {Array.isArray(volatilityIndicators) && volatilityIndicators.length > 0 && (
+                <Card title="Volatility" icon="📊" accentColor="#ea580c" style={{ animationDelay:'0.12s' }}>
+                  <div style={{ display:'grid', gap:5 }}>
+                    {volatilityIndicators.map((t, i) => (
+                      <IndicatorPill key={i} label={t.name} value={t.value} signal={t.signal} />
+                    ))}
+                  </div>
+                </Card>
+              )}
+
+              {/* Volume Indicators */}
+              {Array.isArray(volumeIndicators) && volumeIndicators.length > 0 && (
+                <Card title="Volume Analysis" icon="📶" accentColor="#0891b2" style={{ animationDelay:'0.14s' }}>
+                  <div style={{ display:'grid', gap:5 }}>
+                    {volumeIndicators.map((t, i) => (
+                      <IndicatorPill key={i} label={t.name} value={t.value} signal={t.signal} />
+                    ))}
+                  </div>
+                </Card>
+              )}
+
+              {/* Support & Resistance */}
+              {Object.keys(supportResistance).length > 0 && (
+                <Card title="Support & Resistance" icon="🎯" accentColor="#7c3aed" style={{ animationDelay:'0.16s' }}>
+                  <div className="fund-grid">
+                    {Object.entries(supportResistance).map(([key, val]) => {
+                      const isSupport = key.toLowerCase().includes('support') || key.toLowerCase().includes('fib');
+                      const isResistance = key.toLowerCase().includes('resistance');
+                      return (
+                        <div className="fund-item" key={key}>
+                          <span className="fund-label">{key.replace(/([A-Z])/g,' $1').replace(/(\d)/,' $1').trim()}</span>
+                          <span className="fund-value" style={{ color: isSupport ? '#16a34a' : isResistance ? '#dc2626' : 'var(--text-primary)' }}>
+                            {typeof val === 'number' ? `₹${val.toLocaleString('en-IN')}` : val}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+              )}
+
+              {/* Fallback: legacy technicalIndicators */}
+              {Array.isArray(technicals) && technicals.length > 0 && movingAverages.length === 0 && (
                 <Card title="Technical Indicators" icon="📊" accentColor="#4f46e5" style={{ animationDelay:'0.05s' }}>
                   <div style={{ display:'grid', gap:5 }}>
                     {technicals.map((t, i) => (
@@ -770,8 +930,16 @@ export default function Home() {
                 </Card>
               )}
 
+              {/* Candlestick Patterns */}
+              {Array.isArray(candlestickPatterns) && candlestickPatterns.length > 0 && (
+                <Card title="Candlestick Patterns" icon="🕯" accentColor="#ea580c" style={{ animationDelay:'0.18s' }}>
+                  <div style={{ display:'grid', gap:6 }}>{candlestickPatterns.map((p, i) => <TextBlock key={i} item={p} />)}</div>
+                </Card>
+              )}
+
+              {/* Fundamentals */}
               {Object.keys(fundamentals).length > 0 && (
-                <Card title="Fundamental Metrics" icon="📈" accentColor="#7c3aed" style={{ animationDelay:'0.1s' }}>
+                <Card title="Fundamental Metrics" icon="📋" accentColor="#7c3aed" style={{ animationDelay:'0.2s' }}>
                   <div className="fund-grid">
                     {Object.entries(fundamentals).map(([key, val]) => (
                       <div className="fund-item" key={key}>
@@ -783,34 +951,32 @@ export default function Home() {
                 </Card>
               )}
 
+              {/* Shareholding */}
               {Object.keys(shareholding).length > 0 && (
-                <Card title="Shareholding Pattern" icon="🏛" accentColor="#0891b2" style={{ animationDelay:'0.15s' }}>
+                <Card title="Shareholding Pattern" icon="🏛" accentColor="#0891b2" style={{ animationDelay:'0.22s' }}>
                   <ShareholdingBar data={shareholding} />
                 </Card>
               )}
 
+              {/* Smart Money */}
               {Array.isArray(smartMoney) && smartMoney.length > 0 && (
-                <Card title="Smart Money Signals" icon="💰" accentColor="#d97706" style={{ animationDelay:'0.2s' }}>
+                <Card title="Smart Money Signals" icon="💰" accentColor="#d97706" style={{ animationDelay:'0.24s' }}>
                   <div style={{ display:'grid', gap:6 }}>
                     {smartMoney.map((item, i) => <TextBlock key={i} item={item} />)}
                   </div>
                 </Card>
               )}
 
+              {/* News */}
               {Array.isArray(news) && news.length > 0 && (
-                <Card title="Recent News" icon="📰" accentColor="#16a34a" style={{ animationDelay:'0.25s' }}>
+                <Card title="Recent News" icon="📰" accentColor="#16a34a" style={{ animationDelay:'0.26s' }}>
                   <div style={{ display:'grid', gap:5 }}>{news.map((item, i) => <NewsItem key={i} item={item} />)}</div>
                 </Card>
               )}
 
-              {Array.isArray(candlestickPatterns) && candlestickPatterns.length > 0 && (
-                <Card title="Candlestick Patterns" icon="🕯" accentColor="#ea580c" style={{ animationDelay:'0.3s' }}>
-                  <div style={{ display:'grid', gap:6 }}>{candlestickPatterns.map((p, i) => <TextBlock key={i} item={p} />)}</div>
-                </Card>
-              )}
-
+              {/* Risks & Catalysts */}
               {(risks.length > 0 || catalysts.length > 0) && (
-                <Card title="Risks & Catalysts" icon="⚡" accentColor="#dc2626" style={{ animationDelay:'0.35s' }}>
+                <Card title="Risks & Catalysts" icon="⚠️" accentColor="#dc2626" style={{ animationDelay:'0.28s' }}>
                   {risks.length > 0 && (
                     <div style={{ marginBottom: catalysts.length > 0 ? 18 : 0 }}>
                       <p style={{ fontSize:12, color:'#dc2626', fontWeight:700, marginBottom:8, textTransform:'uppercase', letterSpacing:'0.06em' }}>Risks</p>
@@ -834,14 +1000,16 @@ export default function Home() {
                 </Card>
               )}
 
+              {/* Strategies */}
               {Array.isArray(strategies) && strategies.length > 0 && (
-                <Card title="Trading Strategies" icon="🎯" accentColor="#4f46e5" style={{ animationDelay:'0.4s' }}>
+                <Card title="Trading Strategies" icon="🎯" accentColor="#4f46e5" style={{ animationDelay:'0.3s' }}>
                   <div style={{ display:'grid', gap:6 }}>{strategies.map((s, i) => <TextBlock key={i} item={s} />)}</div>
                 </Card>
               )}
 
+              {/* Research Links */}
               {Array.isArray(researchLinks) && researchLinks.length > 0 && (
-                <Card title="Research Links" icon="🔗" accentColor="#0891b2" style={{ animationDelay:'0.45s' }}>
+                <Card title="Research Links" icon="🔗" accentColor="#0891b2" style={{ animationDelay:'0.32s' }}>
                   <div style={{ display:'grid', gap:5 }}>
                     {researchLinks.map((link, i) => (
                       <a key={i} href={link.url || link.href || link} target="_blank" rel="noopener noreferrer"
