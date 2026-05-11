@@ -369,9 +369,9 @@ export default function Home() {
       const text = await res.text();
       let json;
       try { json = JSON.parse(text); } catch {
-        throw new Error('Invalid response from screener. Try again.');
+        throw new Error(text.length > 200 ? text.substring(0, 200) + '...' : (text || 'Empty response from server'));
       }
-      if (!res.ok || json.error) throw new Error(json.error || `Error: ${res.status}`);
+      if (!res.ok || json.error) throw new Error(json.error || 'Error: ' + res.status);
       setScreenData(json);
       addToHistory(s, json);
       setExpandedCharts({});
