@@ -109,11 +109,15 @@ export default async function handler(req, res) {
   const { stock } = req.body || {};
   if (!stock?.trim()) return res.status(400).json({ error: 'Stock name required' });
 
-  // Model priority:
-  // 1. gemma-3-27b-it → 14,400 RPD (practically unlimited!)
-  // 2. gemini-2.0-flash → separate quota from 2.5
-  // 3. gemini-2.5-flash → 20 RPD free tier (often exhausted)
-  const models = ['gemma-3-27b-it', 'gemini-2.0-flash', 'gemini-2.5-flash'];
+  // Model priority — try Gemma (14.4K RPD) then Gemini (20 RPD)
+  // Multiple Gemma name variants since the exact API string may differ
+  const models = [
+    'gemma-3-27b-it',
+    'gemma-3-12b-it',
+    'gemma3-27b-it',
+    'gemini-2.0-flash',
+    'gemini-2.5-flash',
+  ];
   const errors = [];
   let rateLimited = false;
 
@@ -144,16 +148,13 @@ export default async function handler(req, res) {
     }
   }
 
-  // Show helpful error based on what happened
-  if (rateLimited) {
-    return res.status(429).json({
-      error: 'Gemini API daily limit exceeded (free tier = 20 requests/day). Go to aistudio.google.com → Set up billing to get 1,500 requests/day for free. Or wait until midnight PT for quota reset.',
-      details: errors,
-    });
-  }
+  // Show helpful error with details for EVERY model
+  const errorMsg = rateLimited
+    ? 'All models rate-limited. Set up billing at aistudio.google.com for 1,500 req/day free.'
+    : 'All models failed.';
 
-  return res.status(502).json({
-    error: 'All models failed. Check Vercel logs for details.',
+  return res.status(rateLimited ? 429 : 502).json({
+    error: `${errorMsg} Per-model errors: ${errors.join(' | ')}`,
     details: errors,
   });
 }
