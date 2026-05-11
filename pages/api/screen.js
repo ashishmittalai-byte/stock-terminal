@@ -75,6 +75,11 @@ async function callGemini(apiKey, model, strategy) {
     generationConfig: { temperature: 0.3, maxOutputTokens: 4096 },
   };
 
+  // Disable thinking mode for Gemma models (their thinking tokens break JSON parsing)
+  if (isGemma) {
+    body.generationConfig.thinkingConfig = { thinkingBudget: 0 };
+  }
+
   if (!isGemma) {
     body.system_instruction = { parts: [{ text: PROMPT }] };
     body.tools = [{ google_search: {} }];
@@ -92,12 +97,13 @@ async function callGemini(apiKey, model, strategy) {
     if (!res.ok) {
       const e = await res.text().catch(() => '');
       if (res.status === 429) throw new Error('RATE_LIMIT');
-      throw new Error(`HTTP ${res.status}: ${e.substring(0, 150)}`);
+      throw new Error('HTTP ' + res.status + ': ' + e.substring(0, 150));
     }
     const data = await res.json();
     const cand = data.candidates?.[0];
     if (!cand?.content?.parts) throw new Error('No content');
-    const text = cand.content.parts.filter(p => p.text).map(p => p.text).join('\n');
+    // Filter out thinking parts (thought: true) and only use text parts
+    const text = cand.content.parts.filter(p => p.text && !p.thought).map(p => p.text).join('\n');
     if (!text || text.trim().length < 30) throw new Error('Empty response');
     return text;
   } finally { clearTimeout(timer); }
