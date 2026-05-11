@@ -276,6 +276,7 @@ export default function Home() {
   // Technical sections
   const movingAverages = d.movingAverages || [];
   const maSummary = d.maSummary || '';
+  const indicators = d.indicators || []; // new merged field
   const momentumIndicators = d.momentumIndicators || [];
   const trendIndicators = d.trendIndicators || [];
   const volatilityIndicators = d.volatilityIndicators || [];
@@ -845,6 +846,17 @@ export default function Home() {
                   {maSummary && <p style={{ fontSize:13, lineHeight:1.6, color:'var(--text-secondary)', marginBottom:14, padding:'10px 14px', background:'rgba(79,70,229,0.04)', borderRadius:8, borderLeft:'3px solid #4f46e5' }}>{maSummary}</p>}
                   <div style={{ display:'grid', gap:5 }}>
                     {movingAverages.map((t, i) => (
+                      <IndicatorPill key={i} label={t.name} value={t.value} signal={t.signal} />
+                    ))}
+                  </div>
+                </Card>
+              )}
+
+              {/* All Technical Indicators (merged) */}
+              {indicators.length > 0 && (
+                <Card title="Technical Indicators" icon="📊" accentColor="#4f46e5" style={{ animationDelay:'0.07s' }}>
+                  <div style={{ display:'grid', gap:5 }}>
+                    {indicators.map((t, i) => (
                       <IndicatorPill key={i} label={t.name} value={t.value} signal={t.signal} />
                     ))}
                   </div>
