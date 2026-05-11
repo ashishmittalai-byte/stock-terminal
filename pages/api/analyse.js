@@ -109,15 +109,8 @@ export default async function handler(req, res) {
   const { stock } = req.body || {};
   if (!stock?.trim()) return res.status(400).json({ error: 'Stock name required' });
 
-  // Model priority — try Gemma (14.4K RPD) then Gemini (20 RPD)
-  // Multiple Gemma name variants since the exact API string may differ
-  const models = [
-    'gemma-3-27b-it',
-    'gemma-3-12b-it',
-    'gemma3-27b-it',
-    'gemini-2.0-flash',
-    'gemini-2.5-flash',
-  ];
+  // Billing enabled → Gemini 2.5 Flash now has 1,500 RPD (plenty)
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash'];
   const errors = [];
   let rateLimited = false;
 
