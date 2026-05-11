@@ -222,9 +222,8 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stock: q }),
       });
-      if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const json = await res.json();
-      if (json.error) throw new Error(json.error);
+      if (!res.ok || json.error) throw new Error(json.error || `Server error: ${res.status}`);
       setData(json);
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
     } catch (e) {
