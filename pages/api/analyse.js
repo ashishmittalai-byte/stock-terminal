@@ -1,353 +1,197 @@
 // pages/api/analyse.js
 // ──────────────────────────────────────────────────────────────
-// Stock Analysis API — calls Gemini with Google Search grounding
-//
-// KEY FIX: Google Search grounding is INCOMPATIBLE with
-// responseMimeType: "application/json" (returns 400).
-// Instead we ask Gemini to return JSON in the prompt and
-// extract it from the text response.
-//
-// Uses gemini-2.5-flash (stable) with v1beta endpoint.
+// Stock Analysis API — Gemini + Google Search grounding
 // ──────────────────────────────────────────────────────────────
 
+// Extend Vercel serverless timeout (Pro=60s, Hobby=10s)
+export const config = { maxDuration: 60 };
+
 const API_KEY = process.env.GEMINI_API_KEY;
+const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
 
-// Models to try in order (first that succeeds wins)
-const MODELS = [
-  'gemini-2.5-flash',
-  'gemini-2.0-flash',
-  'gemini-2.0-flash-lite',
-];
+// ─── Compressed prompt — schema-only, no example values ───
+// This is ~60% smaller than listing example values, so Gemini responds faster.
+const SYSTEM_PROMPT = `You are an expert Indian equity analyst. When given a stock name/ticker, use Google Search to find REAL-TIME data and return a single raw JSON object (NO markdown, NO backticks, NO text outside the JSON).
 
-const SYSTEM_PROMPT = `You are an expert Indian equity technical and fundamental analyst covering all BSE and NSE listed stocks.
-When the user gives a stock name or ticker, use Google Search to find the LATEST real-time data and return a SINGLE JSON object (no markdown, no backticks, just raw JSON) with this EXACT structure:
+Return this exact JSON structure with REAL data from search:
 
 {
-  "stockName": "Full company name",
-  "ticker": "NSE ticker symbol",
-  "exchange": "NSE",
-  "currentPrice": 1234.56,
-  "change": -12.30,
-  "changePercent": -0.99,
-  "dayHigh": 1250.00,
-  "dayLow": 1220.00,
-  "open": 1240.00,
-  "previousClose": 1246.86,
-  "volume": 12500000,
-  "avgVolume": 10000000,
-  "weekHigh52": 1500.00,
-  "weekLow52": 900.00,
-  "marketCap": "850000 Cr",
+  "stockName": string, "ticker": string, "exchange": "NSE"/"BSE",
+  "currentPrice": number, "change": number, "changePercent": number,
+  "open": number, "dayHigh": number, "dayLow": number, "previousClose": number,
+  "volume": number, "avgVolume": number, "weekHigh52": number, "weekLow52": number, "marketCap": string,
 
   "movingAverages": [
-    {"name": "SMA 5", "value": 1230.50, "signal": "Buy"},
-    {"name": "SMA 10", "value": 1225.30, "signal": "Buy"},
-    {"name": "SMA 20", "value": 1210.00, "signal": "Buy"},
-    {"name": "SMA 50", "value": 1180.00, "signal": "Buy"},
-    {"name": "SMA 100", "value": 1140.00, "signal": "Buy"},
-    {"name": "SMA 200", "value": 1050.00, "signal": "Buy"},
-    {"name": "EMA 9", "value": 1232.00, "signal": "Buy"},
-    {"name": "EMA 12", "value": 1228.50, "signal": "Buy"},
-    {"name": "EMA 21", "value": 1218.00, "signal": "Buy"},
-    {"name": "EMA 50", "value": 1185.00, "signal": "Buy"},
-    {"name": "EMA 100", "value": 1145.00, "signal": "Buy"},
-    {"name": "EMA 200", "value": 1060.00, "signal": "Buy"}
+    // 12 items: SMA 5,10,20,50,100,200 and EMA 9,12,21,50,100,200
+    // Each: {"name": "SMA 20", "value": number, "signal": "Buy"/"Sell"/"Neutral"}
+    // signal = "Buy" if price > MA, "Sell" if price < MA
   ],
-  "maSummary": "10 Buy, 2 Neutral — Price trading above all major MAs. Golden Cross active (50 SMA > 200 SMA).",
+  "maSummary": string, // e.g. "10 Buy, 2 Sell. Golden Cross active (50 SMA > 200 SMA)."
 
   "momentumIndicators": [
-    {"name": "RSI (14)", "value": 58.3, "signal": "Neutral", "interpretation": "Neither overbought nor oversold"},
-    {"name": "Stochastic %K (14,3,3)", "value": 72.5, "signal": "Neutral"},
-    {"name": "Stochastic RSI", "value": 0.68, "signal": "Neutral"},
-    {"name": "Williams %R (14)", "value": -27.5, "signal": "Overbought"},
-    {"name": "CCI (20)", "value": 85.3, "signal": "Bullish"},
-    {"name": "ROC (12)", "value": 4.2, "signal": "Bullish"},
-    {"name": "MFI (14)", "value": 62.1, "signal": "Neutral"},
-    {"name": "Ultimate Oscillator", "value": 56.8, "signal": "Neutral"},
-    {"name": "Momentum (10)", "value": 35.2, "signal": "Bullish"}
+    // RSI(14), Stochastic %K(14,3,3), Stochastic RSI, Williams %R(14), CCI(20), ROC(12), MFI(14), Ultimate Oscillator, Momentum(10)
+    // Each: {"name": string, "value": number, "signal": "Bullish"/"Bearish"/"Neutral"/"Overbought"/"Oversold"}
   ],
 
   "trendIndicators": [
-    {"name": "MACD (12,26,9)", "value": 15.3, "signal": "Bullish", "interpretation": "MACD above signal line, histogram positive"},
-    {"name": "MACD Signal", "value": 10.1, "signal": "Bullish"},
-    {"name": "MACD Histogram", "value": 5.2, "signal": "Bullish"},
-    {"name": "ADX (14)", "value": 28.5, "signal": "Trending", "interpretation": "Moderate trend strength"},
-    {"name": "+DI", "value": 32.1, "signal": "Bullish"},
-    {"name": "-DI", "value": 18.4, "signal": "Bullish"},
-    {"name": "Parabolic SAR", "value": 1195.00, "signal": "Bullish", "interpretation": "SAR below price = uptrend"},
-    {"name": "Supertrend (10,3)", "value": 1185.00, "signal": "Bullish"},
-    {"name": "Aroon Up", "value": 85.7, "signal": "Bullish"},
-    {"name": "Aroon Down", "value": 21.4, "signal": "Bullish"},
-    {"name": "Ichimoku Base Line", "value": 1200.00, "signal": "Bullish"},
-    {"name": "Ichimoku Conv. Line", "value": 1225.00, "signal": "Bullish"},
-    {"name": "VWAP", "value": 1232.50, "signal": "Neutral"}
+    // MACD(12,26,9), MACD Signal, MACD Histogram, ADX(14), +DI, -DI, Parabolic SAR, Supertrend(10,3), Aroon Up, Aroon Down, Ichimoku Base, Ichimoku Conv, VWAP
+    // Each: {"name": string, "value": number/string, "signal": string}
   ],
 
   "volatilityIndicators": [
-    {"name": "Bollinger Upper (20,2)", "value": 1280.00, "signal": "Neutral"},
-    {"name": "Bollinger Middle", "value": 1210.00, "signal": "Buy"},
-    {"name": "Bollinger Lower", "value": 1140.00, "signal": "Buy"},
-    {"name": "Bollinger %B", "value": 0.67, "signal": "Neutral", "interpretation": "Price in upper half of bands"},
-    {"name": "Bollinger Bandwidth", "value": 11.6, "signal": "Neutral"},
-    {"name": "ATR (14)", "value": 32.5, "signal": "Normal"},
-    {"name": "Keltner Upper", "value": 1270.00, "signal": "Neutral"},
-    {"name": "Keltner Lower", "value": 1150.00, "signal": "Neutral"},
-    {"name": "Historical Volatility", "value": "22.5%", "signal": "Normal"},
-    {"name": "Std Dev (20)", "value": 35.0, "signal": "Normal"}
+    // Bollinger Upper(20,2), Bollinger Middle, Bollinger Lower, Bollinger %B, Bollinger Bandwidth, ATR(14), Keltner Upper, Keltner Lower, Historical Volatility, Std Dev(20)
+    // Each: {"name": string, "value": number/string, "signal": string}
   ],
 
   "volumeIndicators": [
-    {"name": "Volume", "value": "12.5M", "signal": "Above Avg"},
-    {"name": "Volume Ratio", "value": 1.25, "signal": "Bullish"},
-    {"name": "OBV", "value": "45.2M", "signal": "Bullish", "interpretation": "OBV trending up with price"},
-    {"name": "Chaikin Money Flow", "value": 0.15, "signal": "Bullish"},
-    {"name": "A/D Line", "value": "Rising", "signal": "Bullish"},
-    {"name": "Volume SMA 20", "value": "10.0M", "signal": "Bullish"}
+    // Volume, Volume Ratio, OBV, Chaikin Money Flow, A/D Line, Volume SMA 20
+    // Each: {"name": string, "value": number/string, "signal": string}
   ],
 
   "chartPattern": {
-    "pattern": "Ascending Triangle",
+    "pattern": string, // current dominant pattern on daily chart e.g. "Ascending Triangle"
     "timeframe": "Daily",
-    "status": "In Progress",
-    "completionPercent": 75,
-    "breakoutLevel": 1260.00,
-    "targetPrice": 1340.00,
-    "stopLoss": 1185.00,
-    "implication": "Bullish",
-    "description": "Price forming higher lows with a flat resistance at 1260. A breakout above this level with volume could push the price toward 1340. A breakdown below the ascending trendline (~1185) would negate this pattern.",
-    "additionalPatterns": ["Price above Ichimoku Cloud", "Golden Cross active"]
+    "status": "In Progress"/"Completed"/"Failed",
+    "completionPercent": number,
+    "breakoutLevel": number,
+    "targetPrice": number,
+    "stopLoss": number,
+    "implication": "Bullish"/"Bearish"/"Neutral",
+    "description": string, // 2-3 sentences describing the pattern and key levels
+    "additionalPatterns": [string] // other active patterns/confluences
   },
 
   "supportResistance": {
-    "support1": 1210.00,
-    "support2": 1180.00,
-    "support3": 1140.00,
-    "resistance1": 1260.00,
-    "resistance2": 1300.00,
-    "resistance3": 1350.00,
-    "pivotPoint": 1235.00,
-    "fibRetracement38": 1195.00,
-    "fibRetracement50": 1175.00,
-    "fibRetracement62": 1155.00
+    "support1": number, "support2": number, "support3": number,
+    "resistance1": number, "resistance2": number, "resistance3": number,
+    "pivotPoint": number,
+    "fibRetracement38": number, "fibRetracement50": number, "fibRetracement62": number
   },
 
   "technicalIndicators": [
-    {"name": "52-Week Range Position", "value": "55.7%", "signal": "Neutral"},
-    {"name": "Distance from 52W High", "value": "-17.7%", "signal": "Neutral"},
-    {"name": "Distance from 52W Low", "value": "+37.2%", "signal": "Neutral"},
-    {"name": "Price vs SMA 200", "value": "+17.5%", "signal": "Bullish"},
-    {"name": "Beta", "value": 1.15, "signal": "Neutral"},
-    {"name": "Delivery %", "value": "42.5%", "signal": "Neutral"}
+    // 52-Week Range Position, Distance from 52W High/Low, Price vs SMA 200, Beta, Delivery %
+    // Each: {"name": string, "value": string/number, "signal": string}
   ],
 
   "candlestickPatterns": [
-    {"name": "Pattern name on recent chart", "signal": "Bullish/Bearish", "reliability": "High/Medium/Low"}
+    // 2-3 recent patterns on daily chart
+    // Each: {"name": string, "signal": "Bullish"/"Bearish", "reliability": "High"/"Medium"/"Low"}
   ],
 
   "fundamentals": {
-    "P/E (TTM)": 25.4,
-    "P/E (Fwd)": 22.1,
-    "P/B": 4.2,
-    "EPS (TTM)": 48.7,
-    "PEG": 1.2,
-    "ROE": "18.5%",
-    "ROCE": "22.1%",
-    "ROA": "8.2%",
-    "D/E": 0.3,
-    "Current Ratio": 1.8,
-    "Operating Margin": "24.5%",
-    "Net Margin": "16.2%",
-    "Revenue Growth (YoY)": "12%",
-    "Profit Growth (YoY)": "8%",
-    "FCF Yield": "3.2%",
-    "Dividend Yield": "1.5%",
-    "Book Value": 295.00,
-    "Face Value": 10,
-    "EV/EBITDA": 18.5,
-    "Price/Sales": 5.2
+    // Include ALL: P/E(TTM), P/E(Fwd), P/B, EPS(TTM), PEG, ROE, ROCE, ROA, D/E, Current Ratio,
+    // Operating Margin, Net Margin, Revenue Growth(YoY), Profit Growth(YoY), FCF Yield,
+    // Dividend Yield, Book Value, Face Value, EV/EBITDA, Price/Sales
   },
 
-  "shareholding": {
-    "promoter": 52.3,
-    "fii": 18.7,
-    "dii": 14.2,
-    "public": 14.8
-  },
+  "shareholding": { "promoter": number, "fii": number, "dii": number, "public": number },
 
-  "smartMoney": [
-    "Recent bulk deal: XYZ bought 2M shares",
-    "FII net buyers last 5 sessions",
-    "Promoter pledge status: 0% pledged"
-  ],
-  "news": [
-    {"headline": "Headline text", "source": "Source name", "date": "May 2026"}
-  ],
-  "risks": ["Key risk 1", "Key risk 2", "Key risk 3"],
-  "catalysts": ["Catalyst 1", "Catalyst 2", "Catalyst 3"],
-  "strategies": [
-    {"name": "Swing Trade", "description": "Entry, SL, Target details with levels"},
-    {"name": "Positional", "description": "Medium-term strategy with levels"},
-    {"name": "Long Term", "description": "Long-term accumulation strategy"}
-  ],
-  "researchLinks": [
-    {"title": "Screener.in", "url": "https://www.screener.in/company/TICKER/"},
-    {"title": "Trendlyne", "url": "https://trendlyne.com/equity/TICKER/"},
-    {"title": "Tickertape", "url": "https://www.tickertape.in/stocks/TICKER"},
-    {"title": "TradingView", "url": "https://www.tradingview.com/symbols/NSE-TICKER/"}
-  ],
-  "technicalScore": 65,
-  "fundamentalScore": 72,
-  "compositeScore": 69,
-  "verdict": "Buy",
-  "overallSummary": "2-3 sentence summary of the overall technical + fundamental picture and what a trader should watch for."
+  "smartMoney": [string], // 3+ items: bulk deals, FII/DII activity, promoter pledging
+  "news": [{"headline": string, "source": string, "date": string}], // 3-5 recent headlines
+  "risks": [string], // 3 key risks
+  "catalysts": [string], // 3 key catalysts
+  "strategies": [{"name": string, "description": string}], // Swing, Positional, Long Term with levels
+  "researchLinks": [{"title": string, "url": string}], // Screener, Trendlyne, Tickertape, TradingView
+
+  "technicalScore": number, // 0-100
+  "fundamentalScore": number, // 0-100
+  "compositeScore": number, // tech*0.45 + fund*0.55
+  "verdict": "Strong Buy"/"Buy"/"Hold"/"Sell"/"Strong Sell",
+  "overallSummary": string // 2-3 sentence summary
 }
 
-CRITICAL RULES:
-1. Use Google Search to get REAL, CURRENT, LIVE prices and indicator data — never use stale or made-up data.
-2. Return ONLY the JSON object. No markdown, no backticks, no explanation text before or after the JSON.
-3. All number fields must be actual numbers, not strings (except percentages shown as strings).
-4. The verdict must be exactly one of: "Strong Buy", "Buy", "Hold", "Sell", "Strong Sell".
-5. Scores are 0-100 integers. Composite = Technical×0.45 + Fundamental×0.55.
-6. Fill ALL fields — if exact data is unavailable, provide best estimates from available data.
-7. For chartPattern: identify the CURRENT dominant chart pattern on the DAILY chart. Describe it with actionable breakout/breakdown levels.
-8. For movingAverages: signal should be "Buy" if price > MA, "Sell" if price < MA, "Neutral" if within 0.5%.
-9. The maSummary should count Buy/Sell/Neutral signals and mention any active crossovers (Golden Cross, Death Cross).
-10. Include at least 3-5 recent news headlines.
-11. Include at least 2 candlestick patterns visible on recent daily chart.
-12. All support/resistance levels should be specific price numbers based on actual chart data.`;
+RULES:
+1. Use Google Search for REAL LIVE data. Never fabricate prices.
+2. Return ONLY raw JSON. No markdown fences. No text outside JSON.
+3. Numbers must be numbers, not strings (except % values and marketCap).
+4. Signal for MAs: "Buy" if price>MA, "Sell" if price<MA, "Neutral" if within 0.5%.
+5. maSummary: count Buy/Sell/Neutral, mention crossovers.
+6. chartPattern: identify the CURRENT dominant daily chart pattern with actionable levels.
+7. Fill ALL fields. If unavailable, use best estimate.`;
 
-// ─── Extract JSON from potentially messy Gemini response ───
+// ─── Extract JSON from messy Gemini text ───
 function extractJSON(text) {
   if (!text) return null;
-
-  // Remove markdown code fences
-  let cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-
-  // Try direct parse first
-  try { return JSON.parse(cleaned); } catch {}
-
-  // Find first { ... last }
-  const first = cleaned.indexOf('{');
-  const last = cleaned.lastIndexOf('}');
-  if (first !== -1 && last > first) {
-    try { return JSON.parse(cleaned.substring(first, last + 1)); } catch {}
+  let s = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+  // Direct parse
+  try { return JSON.parse(s); } catch {}
+  // Extract { ... }
+  const i = s.indexOf('{'), j = s.lastIndexOf('}');
+  if (i >= 0 && j > i) {
+    try { return JSON.parse(s.substring(i, j + 1)); } catch {}
+    // Fix trailing commas
+    try {
+      return JSON.parse(s.substring(i, j + 1).replace(/,\s*([}\]])/g, '$1'));
+    } catch {}
   }
-
-  // Try to fix common issues: trailing commas
-  try {
-    const fixed = cleaned
-      .substring(first, last + 1)
-      .replace(/,\s*}/g, '}')
-      .replace(/,\s*]/g, ']');
-    return JSON.parse(fixed);
-  } catch {}
-
   return null;
 }
 
-// ─── Call Gemini API ───
-async function callGemini(model, stockQuery) {
+// ─── Fetch with timeout ───
+async function fetchWithTimeout(url, opts, ms = 55000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { ...opts, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ─── Call Gemini ───
+async function callGemini(model, stock) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${API_KEY}`;
-
-  const body = {
-    system_instruction: {
-      parts: [{ text: SYSTEM_PROMPT }],
-    },
-    contents: [
-      {
-        role: 'user',
-        parts: [{ text: `Analyse this Indian stock: ${stockQuery}` }],
-      },
-    ],
-    tools: [{ google_search: {} }],
-    // NOTE: Do NOT set generationConfig.responseMimeType with google_search tool
-    // They are incompatible and cause 400 errors.
-    generationConfig: {
-      temperature: 0.7,
-      maxOutputTokens: 8192,
-    },
-  };
-
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents: [{ role: 'user', parts: [{ text: `Analyse this Indian stock with all technical indicators and current chart pattern: ${stock}` }] }],
+      tools: [{ google_search: {} }],
+      generationConfig: { temperature: 0.6, maxOutputTokens: 8192 },
+    }),
   });
 
   if (!res.ok) {
-    const errText = await res.text().catch(() => '');
-    throw new Error(`Gemini ${model} returned ${res.status}: ${errText.substring(0, 200)}`);
+    const err = await res.text().catch(() => '');
+    throw new Error(`${model} → ${res.status}: ${err.substring(0, 150)}`);
   }
 
   const data = await res.json();
+  const cand = data.candidates?.[0];
+  if (!cand) throw new Error('No candidates');
+  if (cand.finishReason === 'SAFETY') throw new Error('Blocked by safety filter');
 
-  // Extract text from response
-  const candidate = data.candidates?.[0];
-  if (!candidate) throw new Error('No candidates in Gemini response');
+  const text = (cand.content?.parts || []).filter(p => p.text).map(p => p.text).join('\n');
+  if (!text || text.trim() === '```' || text.trim().length < 20)
+    throw new Error('Empty/invalid response');
 
-  // Check for safety blocks
-  if (candidate.finishReason === 'SAFETY') {
-    throw new Error('Response blocked by safety filters');
-  }
-
-  const parts = candidate.content?.parts || [];
-  const textParts = parts.filter((p) => p.text).map((p) => p.text);
-  const fullText = textParts.join('\n');
-
-  if (!fullText || fullText.trim() === '```' || fullText.trim() === '') {
-    throw new Error('Empty response from Gemini (known grounding issue)');
-  }
-
-  return fullText;
+  return text;
 }
 
-// ─── API Handler ───
+// ─── Handler ───
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  if (!API_KEY) {
-    return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
-  }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!API_KEY) return res.status(500).json({ error: 'GEMINI_API_KEY not set' });
 
   const { stock } = req.body || {};
-  if (!stock || typeof stock !== 'string' || stock.trim().length === 0) {
-    return res.status(400).json({ error: 'Please provide a stock name' });
-  }
+  if (!stock?.trim()) return res.status(400).json({ error: 'Please provide a stock name' });
 
-  const stockQuery = stock.trim();
-  let lastError = null;
-
-  // Try each model in order
+  let lastErr = null;
   for (const model of MODELS) {
     try {
-      console.log(`[analyse] Trying ${model} for "${stockQuery}"...`);
-      const text = await callGemini(model, stockQuery);
-      const parsed = extractJSON(text);
-
-      if (parsed) {
-        console.log(`[analyse] Success with ${model}`);
-        return res.status(200).json(parsed);
-      }
-
-      // If JSON parsing fails, return the raw text wrapped in a basic structure
-      console.warn(`[analyse] ${model} returned non-JSON, wrapping raw text`);
-      return res.status(200).json({
-        stockName: stockQuery,
-        rawAnalysis: text,
-        verdict: 'Hold',
-        error: null,
-      });
-    } catch (err) {
-      console.error(`[analyse] ${model} failed:`, err.message);
-      lastError = err;
-      // Continue to next model
+      const text = await callGemini(model, stock.trim());
+      const json = extractJSON(text);
+      if (json) return res.status(200).json(json);
+      // Fallback: wrap raw text
+      return res.status(200).json({ stockName: stock.trim(), rawAnalysis: text, verdict: 'Hold' });
+    } catch (e) {
+      console.error(`[analyse] ${model}:`, e.message);
+      lastErr = e;
     }
   }
 
-  // All models failed
   return res.status(502).json({
-    error: `Analysis failed after trying all models. Last error: ${lastError?.message || 'Unknown'}`,
+    error: `Analysis failed. ${lastErr?.message?.includes('aborted') ? 'Request timed out — try again.' : lastErr?.message || 'Unknown error'}`,
   });
 }
