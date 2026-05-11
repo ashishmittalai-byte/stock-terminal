@@ -222,7 +222,11 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stock: q }),
       });
-      const json = await res.json();
+      const text = await res.text();
+      let json;
+      try { json = JSON.parse(text); } catch {
+        throw new Error(res.ok ? 'Gemini returned invalid data. Please try again.' : `Server error: ${res.status}`);
+      }
       if (!res.ok || json.error) throw new Error(json.error || `Server error: ${res.status}`);
       setData(json);
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
