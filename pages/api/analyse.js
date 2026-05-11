@@ -51,6 +51,11 @@ async function callGemini(apiKey, model, stock) {
     generationConfig: { temperature: 0.3, maxOutputTokens: 4096 },
   };
 
+  // Disable thinking for Gemma (thinking tokens break JSON parsing)
+  if (isGemma) {
+    body.generationConfig.thinkingConfig = { thinkingBudget: 0 };
+  }
+
   // Gemini models: use system_instruction + google_search grounding
   if (!isGemma) {
     body.system_instruction = { parts: [{ text: PROMPT }] };
@@ -68,13 +73,14 @@ async function callGemini(apiKey, model, stock) {
     });
     if (!res.ok) {
       const e = await res.text().catch(() => '');
-      if (res.status === 429) throw new Error(`RATE_LIMIT`);
-      throw new Error(`HTTP ${res.status}: ${e.substring(0, 150)}`);
+      if (res.status === 429) throw new Error('RATE_LIMIT');
+      throw new Error('HTTP ' + res.status + ': ' + e.substring(0, 150));
     }
     const data = await res.json();
     const cand = data.candidates?.[0];
     if (!cand?.content?.parts) throw new Error('No content');
-    const text = cand.content.parts.filter(p => p.text).map(p => p.text).join('\n');
+    // Filter out thinking parts and only use actual text
+    const text = cand.content.parts.filter(p => p.text && !p.thought).map(p => p.text).join('\n');
     if (!text || text.trim().length < 30) throw new Error('Empty response');
     return text;
   } finally { clearTimeout(timer); }
