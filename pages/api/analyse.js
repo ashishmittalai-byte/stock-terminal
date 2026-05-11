@@ -51,6 +51,26 @@ function extractJSON(text) {
 async function callGemini(model, stock) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${API_KEY}`;
 
+  const isGemma = model.startsWith('gemma');
+
+  // Gemma models may not support system_instruction — merge into user message
+  const body = {
+    contents: [{
+      role: 'user',
+      parts: [{
+        text: isGemma
+          ? `${PROMPT}\n\nNow analyse this Indian stock: ${stock}`
+          : `Analyse Indian stock: ${stock}`
+      }],
+    }],
+    generationConfig: { temperature: 0.4, maxOutputTokens: 8192 },
+  };
+
+  // Only add system_instruction for Gemini models
+  if (!isGemma) {
+    body.system_instruction = { parts: [{ text: PROMPT }] };
+  }
+
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 9000);
 
@@ -58,11 +78,7 @@ async function callGemini(model, stock) {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: PROMPT }] },
-        contents: [{ role: 'user', parts: [{ text: `Analyse Indian stock: ${stock}` }] }],
-        generationConfig: { temperature: 0.4, maxOutputTokens: 8192 },
-      }),
+      body: JSON.stringify(body),
       signal: ctrl.signal,
     });
 
@@ -93,9 +109,11 @@ export default async function handler(req, res) {
   const { stock } = req.body || {};
   if (!stock?.trim()) return res.status(400).json({ error: 'Stock name required' });
 
-  // Try models in order — different models have SEPARATE daily quotas
-  // If 2.5-flash is rate-limited, 2.0-flash and 1.5-flash may still work
-  const models = ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-1.5-flash'];
+  // Model priority:
+  // 1. gemma-3-27b-it → 14,400 RPD (practically unlimited!)
+  // 2. gemini-2.0-flash → separate quota from 2.5
+  // 3. gemini-2.5-flash → 20 RPD free tier (often exhausted)
+  const models = ['gemma-3-27b-it', 'gemini-2.0-flash', 'gemini-2.5-flash'];
   const errors = [];
   let rateLimited = false;
 
