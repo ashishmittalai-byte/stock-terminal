@@ -37,6 +37,26 @@ function extractJSON(text) {
 
 async function callGemini(apiKey, model, stock) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const isGemma = model.startsWith('gemma');
+
+  const body = {
+    contents: [{
+      role: 'user',
+      parts: [{
+        text: isGemma
+          ? `${PROMPT}\n\nAnalyse this Indian stock with all indicators: ${stock}`
+          : `Get current live price and analyse Indian stock: ${stock}`
+      }],
+    }],
+    generationConfig: { temperature: 0.3, maxOutputTokens: 4096 },
+  };
+
+  // Gemini models: use system_instruction + google_search grounding
+  if (!isGemma) {
+    body.system_instruction = { parts: [{ text: PROMPT }] };
+    body.tools = [{ google_search: {} }];
+  }
+
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 25000);
   try {
@@ -44,12 +64,7 @@ async function callGemini(apiKey, model, stock) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: ctrl.signal,
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: PROMPT }] },
-        contents: [{ role: 'user', parts: [{ text: `Get current live price and analyse Indian stock: ${stock}` }] }],
-        tools: [{ google_search: {} }],
-        generationConfig: { temperature: 0.3, maxOutputTokens: 4096 },
-      }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
       const e = await res.text().catch(() => '');
@@ -88,12 +103,13 @@ export default async function handler(req) {
       return new Response(JSON.stringify({ error: 'Stock name required' }), { status: 400, headers: H });
     }
 
-    // Free tier quotas — USE THE HIGHEST LIMITS:
-    // gemini-3.1-flash-lite  → 500 RPD, 15 RPM  ← BEST free tier model!
-    // gemini-3-flash-preview → 20 RPD, 5 RPM
-    // gemini-2.5-flash-lite  → 20 RPD, 10 RPM
-    // Total: 540 analyses/day on free tier!
-    const models = ['gemini-3.1-flash-lite-preview', 'gemini-3-flash-preview', 'gemini-2.5-flash-lite'];
+    // Model waterfall — try best models first, Gemma as unlimited fallback:
+    // gemini-3.1-flash-lite         → 500 RPD (with billing) / ~20 RPD (free)
+    // gemini-3.1-flash-lite-preview → same
+    // gemini-3-flash-preview        → 20 RPD
+    // gemini-2.5-flash-lite         → 20 RPD
+    // gemma-3-27b-it                → 14,400 RPD (no grounding, but never rate-limited!)
+    const models = ['gemini-3.1-flash-lite', 'gemini-3.1-flash-lite-preview', 'gemini-3-flash-preview', 'gemini-2.5-flash-lite', 'gemma-3-27b-it'];
     const errors = [];
 
     for (const model of models) {
