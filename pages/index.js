@@ -164,9 +164,15 @@ export default function Home() {
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeIdx, setActiveIdx] = useState(-1);
+  const [tab, setTab] = useState('analyse'); // 'analyse' | 'screener'
+  const [screenStrategy, setScreenStrategy] = useState('');
+  const [screenLoading, setScreenLoading] = useState(false);
+  const [screenData, setScreenData] = useState(null);
+  const [screenError, setScreenError] = useState('');
   const resultsRef = useRef(null);
   const suggestRef = useRef(null);
   const debounceRef = useRef(null);
+  const screenRef = useRef(null);
 
   useEffect(() => {
     try { const w = JSON.parse(localStorage.getItem('stockWatchlist') || '[]'); setWatchlist(w); } catch {}
@@ -268,6 +274,56 @@ export default function Home() {
     analyse(s.name);
   };
 
+  // ─── Screener ───
+  const STRATEGIES = [
+    { label: '15-Min Breakout', icon: '⚡', query: 'Indian stocks showing 15-minute timeframe breakout today with volume surge above resistance' },
+    { label: '1-Hour Breakout', icon: '📈', query: 'Indian stocks showing 1-hour timeframe breakout today breaking above key resistance with high volume' },
+    { label: 'Daily Breakout', icon: '🚀', query: 'Indian NSE stocks showing daily chart breakout today breaking above 52-week high or major resistance with strong volume' },
+    { label: 'Weekly Breakout', icon: '🔥', query: 'Indian stocks showing weekly chart breakout above long-term resistance or all-time high' },
+    { label: 'Breakdown Stocks', icon: '📉', query: 'Indian stocks breaking down below key support levels today on daily chart with high volume — bearish breakdown' },
+    { label: 'Bullish Engulfing', icon: '🕯', query: 'Indian stocks showing bullish engulfing candlestick pattern on daily chart today' },
+    { label: 'Morning Star', icon: '⭐', query: 'Indian stocks showing morning star or hammer candlestick reversal pattern on daily chart' },
+    { label: 'Golden Cross', icon: '✨', query: 'Indian stocks where 50-day SMA just crossed above 200-day SMA (golden cross) recently' },
+    { label: 'Death Cross', icon: '💀', query: 'Indian stocks where 50-day SMA just crossed below 200-day SMA (death cross) recently' },
+    { label: 'RSI Oversold', icon: '🔋', query: 'Indian stocks with RSI below 30 on daily chart — oversold stocks showing potential reversal' },
+    { label: 'RSI Overbought', icon: '⚠️', query: 'Indian stocks with RSI above 70 on daily chart — overbought stocks that may correct' },
+    { label: 'MACD Crossover', icon: '🔀', query: 'Indian stocks showing MACD bullish crossover (MACD crossing above signal line) on daily chart today' },
+    { label: 'High Volume Spike', icon: '📊', query: 'Indian stocks showing unusual volume spike today — 3x or more average volume with price movement' },
+    { label: 'Ascending Triangle', icon: '📐', query: 'Indian stocks forming ascending triangle chart pattern on daily or weekly chart near completion' },
+    { label: 'Cup & Handle', icon: '☕', query: 'Indian stocks forming cup and handle pattern on daily or weekly chart — bullish continuation' },
+    { label: 'Head & Shoulders', icon: '👤', query: 'Indian stocks forming head and shoulders or inverse head and shoulders pattern' },
+    { label: 'Flag & Pennant', icon: '🚩', query: 'Indian stocks showing bullish flag or pennant consolidation pattern after a strong move up' },
+    { label: 'Supertrend Buy', icon: '🟢', query: 'Indian stocks that just triggered Supertrend buy signal on daily chart today' },
+  ];
+
+  const runScreener = useCallback(async (strategyText) => {
+    const s = (strategyText || screenStrategy).trim();
+    if (!s) return;
+    setScreenStrategy(s);
+    setScreenLoading(true);
+    setScreenError('');
+    setScreenData(null);
+    try {
+      const res = await fetch('/api/screen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ strategy: s }),
+      });
+      const text = await res.text();
+      let json;
+      try { json = JSON.parse(text); } catch {
+        throw new Error('Invalid response from screener. Try again.');
+      }
+      if (!res.ok || json.error) throw new Error(json.error || `Error: ${res.status}`);
+      setScreenData(json);
+      setTimeout(() => screenRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
+    } catch (e) {
+      setScreenError(e.message || 'Screener failed');
+    } finally {
+      setScreenLoading(false);
+    }
+  }, [screenStrategy]);
+
   // Safe field extraction
   const d = data || {};
   const price = d.currentPrice || d.price || d.ltp;
@@ -306,6 +362,7 @@ export default function Home() {
   const compositeScore = parseScore(d.compositeScore || d.overallScore || ((techScore * 0.45) + (fundScore * 0.55)));
   const stockName = d.stockName || d.name || query;
   const modelUsed = d._model || '';
+  const skippedModels = d._skipped || [];
 
   return (
     <>
@@ -528,6 +585,46 @@ export default function Home() {
           background:#f3f4f8;
         }
 
+        /* ─── Tab Bar ─── */
+        .tab-bar { display:flex; gap:4px; padding:4px; background:var(--pill-bg); border-radius:var(--radius-md); border:1px solid var(--pill-border); }
+        .tab-btn {
+          flex:1; padding:10px 20px; border:none; border-radius:var(--radius-sm);
+          font-size:13px; font-weight:600; font-family:'DM Sans',sans-serif;
+          cursor:pointer; transition:all 0.2s; background:transparent; color:var(--text-muted);
+        }
+        .tab-btn.active { background:#ffffff; color:var(--accent-blue); box-shadow:0 1px 3px rgba(0,0,0,0.06); }
+        .tab-btn:not(.active):hover { color:var(--text-primary); }
+
+        /* ─── Strategy Chip ─── */
+        .strat-chip {
+          display:flex; align-items:center; gap:6px;
+          padding:10px 16px; border-radius:var(--radius-sm);
+          border:1px solid rgba(0,0,0,0.06); background:#ffffff;
+          font-size:13px; font-weight:500; color:var(--text-secondary);
+          cursor:pointer; transition:all 0.2s; font-family:'DM Sans',sans-serif;
+          box-shadow:0 1px 2px rgba(0,0,0,0.03);
+        }
+        .strat-chip:hover {
+          border-color:var(--accent-blue); color:var(--text-primary);
+          transform:translateY(-1px); box-shadow:0 3px 10px rgba(0,0,0,0.06);
+        }
+        .strat-chip:active { transform:scale(0.97); }
+
+        /* ─── Screen Result Card ─── */
+        .screen-card {
+          background:#ffffff; border:1px solid rgba(0,0,0,0.06);
+          border-radius:var(--radius-lg); padding:20px;
+          box-shadow:0 1px 3px rgba(0,0,0,0.04);
+          transition:all 0.2s; animation:fadeUp 0.4s ease both;
+        }
+        .screen-card:hover { box-shadow:0 4px 16px rgba(0,0,0,0.07); border-color:rgba(0,0,0,0.1); }
+        .signal-badge {
+          display:inline-block; padding:3px 10px; border-radius:6px;
+          font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em;
+        }
+        .signal-bullish { background:rgba(22,163,74,0.08); color:#16a34a; }
+        .signal-bearish { background:rgba(220,38,38,0.08); color:#dc2626; }
+
         /* ─── Responsive ─── */
         @media (max-width:768px) {
           .results-grid { grid-template-columns:1fr !important; }
@@ -585,6 +682,17 @@ export default function Home() {
             </div>
           </div>
         )}
+
+        {/* ── Tab Bar ── */}
+        <div style={{ maxWidth:320, margin:'16px auto' }}>
+          <div className="tab-bar">
+            <button className={`tab-btn${tab==='analyse'?' active':''}`} onClick={() => setTab('analyse')}>📊 Analyse</button>
+            <button className={`tab-btn${tab==='screener'?' active':''}`} onClick={() => setTab('screener')}>🔍 Screener</button>
+          </div>
+        </div>
+
+        {/* ══════════ ANALYSE TAB ══════════ */}
+        {tab === 'analyse' && (<>
 
         {/* ── Hero ── */}
         {!data && !loading && (
@@ -708,7 +816,8 @@ export default function Home() {
                   <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:6, flexWrap:'wrap' }}>
                     <h2 style={{ fontSize:24, fontWeight:700, letterSpacing:'-0.02em' }}>{stockName}</h2>
                     {modelUsed && (
-                      <span style={{ fontSize:10, fontWeight:600, padding:'3px 8px', borderRadius:5, background:'rgba(79,70,229,0.07)', color:'#4f46e5', letterSpacing:'0.04em', fontFamily:"'JetBrains Mono',monospace", whiteSpace:'nowrap' }}>
+                      <span title={skippedModels.length > 0 ? `Skipped: ${skippedModels.join(', ')}` : 'First model succeeded'}
+                        style={{ fontSize:10, fontWeight:600, padding:'3px 8px', borderRadius:5, background:'rgba(79,70,229,0.07)', color:'#4f46e5', letterSpacing:'0.04em', fontFamily:"'JetBrains Mono',monospace", whiteSpace:'nowrap', cursor:'help' }}>
                         {modelUsed}
                       </span>
                     )}
@@ -721,6 +830,11 @@ export default function Home() {
                       {watchlist.includes(stockName) ? '★' : '☆'}
                     </button>
                   </div>
+                  {skippedModels.length > 0 && (
+                    <p style={{ fontSize:10, color:'var(--text-muted)', marginBottom:6, fontFamily:"'JetBrains Mono',monospace", lineHeight:1.5 }}>
+                      Skipped: {skippedModels.join(' → ')}
+                    </p>
+                  )}
                   {price && (
                     <div style={{ display:'flex', alignItems:'baseline', gap:12, flexWrap:'wrap' }}>
                       <span style={{ fontSize:38, fontWeight:700, fontFamily:"'JetBrains Mono',monospace", letterSpacing:'-0.02em' }}>
@@ -1055,6 +1169,227 @@ export default function Home() {
             </div>
           </div>
         )}
+
+        </>)} {/* END ANALYSE TAB */}
+
+        {/* ══════════ SCREENER TAB ══════════ */}
+        {tab === 'screener' && (<>
+
+          {/* Screener Hero */}
+          {!screenData && !screenLoading && (
+            <div style={{ textAlign:'center', padding:'40px 0 32px' }}>
+              <h2 style={{ fontSize:32, fontWeight:700, letterSpacing:'-0.02em', color:'var(--text-primary)', marginBottom:8 }}>
+                Strategy Screener
+              </h2>
+              <p style={{ fontSize:15, color:'var(--text-muted)', maxWidth:480, margin:'0 auto', lineHeight:1.6 }}>
+                Find stocks matching technical patterns — breakouts, breakdowns, candlestick signals, and more.
+              </p>
+            </div>
+          )}
+
+          {/* Custom Strategy Input */}
+          <div style={{ maxWidth:600, margin:'0 auto 24px', position:'relative' }}>
+            <input className="search-input" type="text" style={{ paddingLeft:20 }}
+              placeholder="Type a custom strategy… e.g. 'stocks near 52-week high with RSI above 60'"
+              value={screenStrategy}
+              onChange={e => setScreenStrategy(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') runScreener(); }}
+              disabled={screenLoading} />
+            <div style={{ display:'flex', justifyContent:'center', marginTop:14 }}>
+              <button className="btn-primary" onClick={() => runScreener()} disabled={screenLoading || !screenStrategy.trim()}>
+                {screenLoading ? (
+                  <><span className="loader-ring" style={{ width:16, height:16, borderWidth:2 }} /> Scanning…</>
+                ) : (
+                  <>Scan Stocks <span style={{ fontSize:16, marginLeft:2 }}>→</span></>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Pre-built Strategies */}
+          {!screenData && !screenLoading && (
+            <div style={{ marginBottom:32 }}>
+              <p style={{ fontSize:11, color:'var(--text-muted)', textAlign:'center', marginBottom:14, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.1em' }}>
+                Pre-built Strategies
+              </p>
+              <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:8 }}>
+                {STRATEGIES.map((s, i) => (
+                  <button key={i} className="strat-chip" onClick={() => { setScreenStrategy(s.label); runScreener(s.query); }}>
+                    <span>{s.icon}</span> {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Loading */}
+          {screenLoading && (
+            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'60px 20px', gap:20 }}>
+              <div className="loader-ring" />
+              <div style={{ textAlign:'center' }}>
+                <p style={{ fontSize:16, fontWeight:600, color:'var(--text-primary)', marginBottom:4 }}>Scanning markets…</p>
+                <p style={{ fontSize:13, color:'var(--text-muted)' }}>Finding stocks matching: {screenStrategy}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Error */}
+          {screenError && (
+            <div style={{ maxWidth:600, margin:'20px auto', padding:'14px 20px', borderRadius:12, background:'rgba(220,38,38,0.05)', border:'1px solid rgba(220,38,38,0.15)', color:'#dc2626', fontSize:14, textAlign:'center' }}>
+              {screenError}
+            </div>
+          )}
+
+          {/* Screener Results */}
+          {screenData && !screenLoading && (
+            <div ref={screenRef} style={{ paddingBottom:60 }}>
+
+              {/* Strategy Header */}
+              <Card style={{ marginBottom:16 }}>
+                <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', flexWrap:'wrap', gap:12 }}>
+                  <div>
+                    <h3 style={{ fontSize:20, fontWeight:700, color:'var(--text-primary)', marginBottom:4 }}>
+                      {screenData.strategy || screenStrategy}
+                    </h3>
+                    {screenData.description && (
+                      <p style={{ fontSize:13, color:'var(--text-secondary)', lineHeight:1.6 }}>{screenData.description}</p>
+                    )}
+                    {screenData.marketContext && (
+                      <p style={{ fontSize:12, color:'var(--text-muted)', marginTop:8, padding:'8px 12px', background:'var(--pill-bg)', borderRadius:8 }}>
+                        📊 {screenData.marketContext}
+                      </p>
+                    )}
+                  </div>
+                  {screenData._model && (
+                    <span style={{ fontSize:10, fontWeight:600, padding:'3px 8px', borderRadius:5, background:'rgba(79,70,229,0.07)', color:'#4f46e5', fontFamily:"'JetBrains Mono',monospace" }}>
+                      {screenData._model}
+                    </span>
+                  )}
+                </div>
+                {screenData.results && (
+                  <p style={{ fontSize:13, fontWeight:600, color:'var(--accent-blue)', marginTop:12 }}>
+                    {screenData.results.length} stock{screenData.results.length !== 1 ? 's' : ''} found
+                  </p>
+                )}
+              </Card>
+
+              {/* Results Grid */}
+              {screenData.results && screenData.results.length > 0 && (
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(340px, 1fr))', gap:14 }}>
+                  {screenData.results.map((r, i) => (
+                    <div key={i} className="screen-card" style={{ animationDelay:`${i * 0.05}s` }}>
+                      {/* Stock Header */}
+                      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:12 }}>
+                        <div>
+                          <h4 style={{ fontSize:16, fontWeight:700, color:'var(--text-primary)', marginBottom:2 }}>
+                            {r.stockName}
+                          </h4>
+                          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                            <span style={{ fontSize:11, fontWeight:600, color:'var(--accent-blue)', fontFamily:"'JetBrains Mono',monospace", background:'rgba(79,70,229,0.06)', padding:'1px 6px', borderRadius:4 }}>
+                              {r.ticker}
+                            </span>
+                            {r.sector && <span className="label-text">{r.sector}</span>}
+                          </div>
+                        </div>
+                        <div style={{ textAlign:'right' }}>
+                          {r.currentPrice && (
+                            <p style={{ fontSize:18, fontWeight:700, fontFamily:"'JetBrains Mono',monospace", color:'var(--text-primary)' }}>
+                              ₹{typeof r.currentPrice === 'number' ? r.currentPrice.toLocaleString('en-IN') : r.currentPrice}
+                            </p>
+                          )}
+                          {r.changePercent !== undefined && (
+                            <p style={{ fontSize:12, fontWeight:600, fontFamily:"'JetBrains Mono',monospace", color: r.changePercent >= 0 ? '#16a34a' : '#dc2626' }}>
+                              {r.changePercent >= 0 ? '▲' : '▼'} {Math.abs(r.changePercent)}%
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Signal & Pattern */}
+                      <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:12 }}>
+                        {r.signal && (
+                          <span className={`signal-badge ${r.signal === 'Bullish' ? 'signal-bullish' : 'signal-bearish'}`}>
+                            {r.signal === 'Bullish' ? '▲' : '▼'} {r.signal}
+                          </span>
+                        )}
+                        {r.strength && (
+                          <span style={{ fontSize:11, fontWeight:600, padding:'3px 10px', borderRadius:6, background:'var(--pill-bg)', color:'var(--text-secondary)' }}>
+                            {r.strength}
+                          </span>
+                        )}
+                        {r.timeframe && (
+                          <span style={{ fontSize:11, fontWeight:600, padding:'3px 10px', borderRadius:6, background:'var(--pill-bg)', color:'var(--text-muted)' }}>
+                            {r.timeframe}
+                          </span>
+                        )}
+                        {r.volume && (
+                          <span style={{ fontSize:11, fontWeight:600, padding:'3px 10px', borderRadius:6, background:'var(--pill-bg)', color:'var(--text-muted)' }}>
+                            Vol: {r.volume}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Pattern & Explanation */}
+                      {r.pattern && (
+                        <p style={{ fontSize:13, fontWeight:600, color:'var(--text-primary)', marginBottom:6 }}>{r.pattern}</p>
+                      )}
+                      {r.explanation && (
+                        <p style={{ fontSize:12, lineHeight:1.6, color:'var(--text-secondary)', marginBottom:12 }}>{r.explanation}</p>
+                      )}
+
+                      {/* Key Levels */}
+                      {(r.breakoutLevel || r.targetPrice || r.stopLoss) && (
+                        <div style={{ display:'flex', gap:8, marginBottom:12 }}>
+                          {r.breakoutLevel && (
+                            <div className="fund-item" style={{ flex:1 }}>
+                              <span className="fund-label">Breakout</span>
+                              <span className="mono-value" style={{ color:'#4f46e5', fontSize:12 }}>₹{r.breakoutLevel}</span>
+                            </div>
+                          )}
+                          {r.targetPrice && (
+                            <div className="fund-item" style={{ flex:1 }}>
+                              <span className="fund-label">Target</span>
+                              <span className="mono-value" style={{ color:'#16a34a', fontSize:12 }}>₹{r.targetPrice}</span>
+                            </div>
+                          )}
+                          {r.stopLoss && (
+                            <div className="fund-item" style={{ flex:1 }}>
+                              <span className="fund-label">Stop Loss</span>
+                              <span className="mono-value" style={{ color:'#dc2626', fontSize:12 }}>₹{r.stopLoss}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Action Buttons */}
+                      <div style={{ display:'flex', gap:8 }}>
+                        <button className="btn-ghost" style={{ flex:1, justifyContent:'center', fontSize:12 }}
+                          onClick={() => { setTab('analyse'); analyse(r.stockName || r.ticker); }}>
+                          📊 Full Analysis
+                        </button>
+                        {r.tradingviewUrl && (
+                          <a href={r.tradingviewUrl} target="_blank" rel="noopener noreferrer"
+                            className="btn-ghost" style={{ flex:1, justifyContent:'center', fontSize:12, textDecoration:'none' }}>
+                            📈 TradingView
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Disclaimer */}
+              <div style={{ marginTop:24, padding:'14px 20px', borderRadius:12, background:'#ffffff', border:'1px solid rgba(0,0,0,0.06)', textAlign:'center' }}>
+                <p style={{ fontSize:11, color:'var(--text-muted)', lineHeight:1.65 }}>
+                  <strong style={{ color:'var(--text-secondary)' }}>Disclaimer:</strong> Screener results are AI-generated and may not reflect real-time data. Always verify with your broker before trading.
+                </p>
+              </div>
+            </div>
+          )}
+
+        </>)} {/* END SCREENER TAB */}
+
       </div>
     </>
   );
