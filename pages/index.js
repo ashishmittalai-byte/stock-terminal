@@ -214,7 +214,11 @@ export default function Home() {
     const csv = [headers.join(','), ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `screener_${screenData.strategy || 'results'}_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+    const fname = 'screener_' + (screenData.strategy || 'results').replace(/\s+/g, '_') + '_' + new Date().toISOString().slice(0, 10) + '.csv';
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fname;
+    a.click();
     URL.revokeObjectURL(url);
   };
 
