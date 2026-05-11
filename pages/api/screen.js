@@ -75,9 +75,7 @@ async function callGemini(apiKey, model, strategy) {
     generationConfig: { temperature: 0.3, maxOutputTokens: 4096 },
   };
 
-  // Disable thinking mode for Gemma models (their thinking tokens break JSON parsing)
   if (isGemma) {
-    body.generationConfig.thinkingConfig = { thinkingBudget: 0 };
   }
 
   if (!isGemma) {
