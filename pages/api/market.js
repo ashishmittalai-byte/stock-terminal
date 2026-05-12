@@ -1,22 +1,48 @@
-// pages/api/market.js — Live market data via Yahoo Finance
+// pages/api/market.js — Live market data via TradingView Scanner API
+// Reliable server-side access, no auth needed, real-time Indian market data
 
-var DEFAULT_INDICES = [
-  { symbol: '^NSEI', label: 'NIFTY 50', short: 'NIFTY' },
-  { symbol: '^NSEBANK', label: 'Bank Nifty', short: 'BANKNIFTY' },
-  { symbol: '^BSESN', label: 'Sensex', short: 'SENSEX' },
-  { symbol: '^CNXIT', label: 'Nifty IT', short: 'CNXIT' },
-  { symbol: '^GSPC', label: 'S&P 500', short: 'SPX' },
+var INDEX_TICKERS = [
+  { tv: 'NSE:NIFTY', short: 'NIFTY', label: 'Nifty 50', exchange: 'NSE' },
+  { tv: 'NSE:BANKNIFTY', short: 'BANKNIFTY', label: 'Bank Nifty', exchange: 'NSE' },
+  { tv: 'BSE:SENSEX', short: 'SENSEX', label: 'Sensex', exchange: 'BSE' },
+  { tv: 'NSE:CNXIT', short: 'CNXIT', label: 'Nifty IT', exchange: 'NSE' },
 ];
 
-var DEFAULT_STOCKS = [
-  'RELIANCE.NS', 'HDFCBANK.NS', 'ICICIBANK.NS', 'TCS.NS', 'INFY.NS',
+var DEFAULT_STOCK_TICKERS = [
+  'NSE:RELIANCE', 'NSE:HDFCBANK', 'NSE:ICICIBANK', 'NSE:TCS', 'NSE:INFY',
 ];
 
-var YF_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Accept': 'application/json',
-  'Accept-Language': 'en-US,en;q=0.9',
-};
+var TV_COLUMNS = [
+  'name', 'description', 'close', 'change', 'change_abs',
+  'open', 'high', 'low', 'prev_close_price', 'volume',
+  'market_cap_basic', 'price_52_week_high', 'price_52_week_low',
+  'exchange', 'currency',
+];
+
+var PERF_COLUMNS = [
+  'name', 'close', 'Perf.W', 'Perf.1M', 'Perf.3M', 'Perf.6M', 'Perf.YTD', 'Perf.Y',
+];
+
+async function tvScan(tickers, columns) {
+  var res = await fetch('https://scanner.tradingview.com/india/scan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0' },
+    body: JSON.stringify({
+      symbols: { tickers: tickers },
+      columns: columns,
+    }),
+  });
+  if (!res.ok) throw new Error('TradingView returned ' + res.status);
+  return res.json();
+}
+
+function mapRow(cols, values) {
+  var obj = {};
+  for (var i = 0; i < cols.length; i++) {
+    obj[cols[i]] = values[i];
+  }
+  return obj;
+}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -26,117 +52,105 @@ export default async function handler(req, res) {
   var detail = req.query.detail;
 
   try {
-    var indexSymbols = DEFAULT_INDICES.map(function(i) { return i.symbol; });
-    var stockSymbols = customSymbols
-      ? customSymbols.split(',').map(function(s) { return s.trim(); })
-      : DEFAULT_STOCKS;
-    var allSymbols = indexSymbols.concat(stockSymbols);
-    var symbolStr = allSymbols.join(',');
+    // Build ticker lists
+    var indexTickers = INDEX_TICKERS.map(function(i) { return i.tv; });
+    var stockTickers = customSymbols
+      ? customSymbols.split(',').map(function(s) {
+          s = s.trim();
+          if (s.indexOf(':') === -1) return 'NSE:' + s.replace('.NS', '').replace('.BO', '');
+          return s;
+        })
+      : DEFAULT_STOCK_TICKERS;
 
-    var quoteRes = null;
-    var endpoints = [
-      'https://query1.finance.yahoo.com/v7/finance/quote?symbols=',
-      'https://query2.finance.yahoo.com/v7/finance/quote?symbols=',
-      'https://query1.finance.yahoo.com/v6/finance/quote?symbols=',
-    ];
+    var allTickers = indexTickers.concat(stockTickers);
 
-    for (var e = 0; e < endpoints.length; e++) {
-      try {
-        quoteRes = await fetch(endpoints[e] + encodeURIComponent(symbolStr), {
-          headers: YF_HEADERS,
-        });
-        if (quoteRes.ok) break;
-        quoteRes = null;
-      } catch (fetchErr) {
-        quoteRes = null;
-      }
-    }
-
-    if (!quoteRes || !quoteRes.ok) {
-      throw new Error('Yahoo Finance API unavailable');
-    }
-
-    var quoteData = await quoteRes.json();
-    var results = (quoteData.quoteResponse && quoteData.quoteResponse.result) || [];
+    var data = await tvScan(allTickers, TV_COLUMNS);
+    var rows = (data && data.data) || [];
 
     var indices = [];
     var stocks = [];
 
-    results.forEach(function(q) {
+    rows.forEach(function(row) {
+      var d = mapRow(TV_COLUMNS, row.d);
+      var tvSymbol = row.s || '';
+
       var item = {
-        symbol: q.symbol || '',
-        name: q.shortName || q.longName || q.symbol || '',
-        price: q.regularMarketPrice || 0,
-        change: q.regularMarketChange || 0,
-        changePercent: q.regularMarketChangePercent || 0,
-        prevClose: q.regularMarketPreviousClose || 0,
-        dayHigh: q.regularMarketDayHigh || 0,
-        dayLow: q.regularMarketDayLow || 0,
-        volume: q.regularMarketVolume || 0,
-        marketCap: q.marketCap || 0,
-        fiftyTwoWeekHigh: q.fiftyTwoWeekHigh || 0,
-        fiftyTwoWeekLow: q.fiftyTwoWeekLow || 0,
-        marketState: q.marketState || 'CLOSED',
-        exchange: q.exchange || '',
-        currency: q.currency || 'INR',
+        symbol: tvSymbol,
+        name: d.description || d.name || '',
+        short: d.name || tvSymbol.split(':')[1] || '',
+        price: d.close || 0,
+        change: d.change_abs || 0,
+        changePercent: d.change || 0,
+        prevClose: d.prev_close_price || 0,
+        dayHigh: d.high || 0,
+        dayLow: d.low || 0,
+        volume: d.volume || 0,
+        marketCap: d.market_cap_basic || 0,
+        fiftyTwoWeekHigh: d.price_52_week_high || 0,
+        fiftyTwoWeekLow: d.price_52_week_low || 0,
+        exchange: d.exchange || tvSymbol.split(':')[0] || 'NSE',
+        currency: d.currency || 'INR',
+        marketState: 'CLOSED', // will be updated below
       };
 
+      // Check if this is an index
       var isIndex = false;
-      for (var i = 0; i < DEFAULT_INDICES.length; i++) {
-        if (DEFAULT_INDICES[i].symbol === q.symbol) {
-          item.label = DEFAULT_INDICES[i].label;
-          item.short = DEFAULT_INDICES[i].short;
+      for (var i = 0; i < INDEX_TICKERS.length; i++) {
+        if (INDEX_TICKERS[i].tv === tvSymbol) {
+          item.label = INDEX_TICKERS[i].label;
+          item.short = INDEX_TICKERS[i].short;
           isIndex = true;
           break;
         }
       }
+
       if (isIndex) indices.push(item);
-      else {
-        item.short = (q.symbol || '').replace('.NS', '').replace('.BO', '');
-        item.label = q.shortName || item.short;
-        stocks.push(item);
-      }
+      else stocks.push(item);
     });
 
+    // Determine market state (NSE: Mon-Fri 9:15-15:30 IST)
+    var now = new Date();
+    var istOffset = 5.5 * 60 * 60 * 1000;
+    var ist = new Date(now.getTime() + istOffset);
+    var day = ist.getUTCDay();
+    var hours = ist.getUTCHours();
+    var mins = ist.getUTCMinutes();
+    var timeNum = hours * 100 + mins;
+    var isOpen = day >= 1 && day <= 5 && timeNum >= 915 && timeNum <= 1530;
+    var mktState = isOpen ? 'REGULAR' : 'CLOSED';
+
+    // Apply market state
+    indices.forEach(function(item) { item.marketState = mktState; });
+    stocks.forEach(function(item) { item.marketState = mktState; });
+
+    // Performance data if requested
     var performance = null;
     if (detail) {
-      try { performance = await fetchPerformance(detail); } catch (e) { performance = null; }
+      try {
+        var perfData = await tvScan([detail], PERF_COLUMNS);
+        if (perfData && perfData.data && perfData.data[0]) {
+          var p = mapRow(PERF_COLUMNS, perfData.data[0].d);
+          performance = {
+            '1W': p['Perf.W'] || null,
+            '1M': p['Perf.1M'] || null,
+            '3M': p['Perf.3M'] || null,
+            '6M': p['Perf.6M'] || null,
+            'YTD': p['Perf.YTD'] || null,
+            '1Y': p['Perf.Y'] || null,
+          };
+        }
+      } catch (e) { performance = null; }
     }
 
-    return res.status(200).json({ indices: indices, stocks: stocks, performance: performance, timestamp: new Date().toISOString() });
+    return res.status(200).json({
+      indices: indices,
+      stocks: stocks,
+      performance: performance,
+      marketState: mktState,
+      timestamp: new Date().toISOString(),
+    });
   } catch (err) {
     console.error('Market API error:', err);
     return res.status(500).json({ error: err.message || 'Failed to fetch market data' });
   }
-}
-
-async function fetchPerformance(symbol) {
-  var chartUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(symbol) + '?range=1y&interval=1d';
-  var chartRes = await fetch(chartUrl, { headers: YF_HEADERS });
-  if (!chartRes.ok) return null;
-  var chartData = await chartRes.json();
-  var result = chartData.chart && chartData.chart.result && chartData.chart.result[0];
-  if (!result) return null;
-  var closes = (result.indicators && result.indicators.quote && result.indicators.quote[0]) ? result.indicators.quote[0].close : [];
-  var timestamps = result.timestamp || [];
-  if (closes.length === 0) return null;
-  var currentPrice = closes[closes.length - 1];
-  var now = Date.now();
-  function getPriceNDaysAgo(days) {
-    var target = now - (days * 86400000);
-    var closest = null, closestDiff = Infinity;
-    for (var i = 0; i < timestamps.length; i++) {
-      var diff = Math.abs((timestamps[i] * 1000) - target);
-      if (diff < closestDiff && closes[i] != null) { closestDiff = diff; closest = closes[i]; }
-    }
-    return closest;
-  }
-  function calcReturn(past) { return (!past || past === 0) ? null : ((currentPrice - past) / past * 100); }
-  var jan1 = new Date(new Date().getFullYear(), 0, 1).getTime();
-  var ytdPrice = null, ytdDiff = Infinity;
-  for (var i = 0; i < timestamps.length; i++) {
-    var diff = Math.abs((timestamps[i] * 1000) - jan1);
-    if (diff < ytdDiff && closes[i] != null) { ytdDiff = diff; ytdPrice = closes[i]; }
-  }
-  return { '1W': calcReturn(getPriceNDaysAgo(7)), '1M': calcReturn(getPriceNDaysAgo(30)), '3M': calcReturn(getPriceNDaysAgo(90)), '6M': calcReturn(getPriceNDaysAgo(180)), 'YTD': calcReturn(ytdPrice), '1Y': calcReturn(getPriceNDaysAgo(365)) };
 }
