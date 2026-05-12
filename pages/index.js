@@ -418,7 +418,7 @@ function SiteFooter() {
           <p className="footer-col-title">Product</p>
           <a href="#" className="footer-link" onClick={function(e) { e.preventDefault(); }}>Analyse</a>
           <a href="#" className="footer-link" onClick={function(e) { e.preventDefault(); }}>Screener</a>
-          <a href="https://github.com/ashishmittalai-byte/stock-terminal" target="_blank" rel="noopener noreferrer" className="footer-link">GitHub ↗</a>
+          <a href="#" className="footer-link" onClick={function(e) { e.preventDefault(); }}>Stocks</a>
         </div>
 
         <div className="footer-col">
@@ -2035,14 +2035,13 @@ export default function Home() {
                       { key: 'symbol', label: 'Symbol', align: 'left' },
                       { key: 'price', label: 'Price', align: 'right' },
                       { key: 'changePct', label: 'Chg %', align: 'right' },
-                      { key: 'volume', label: 'Vol', align: 'right' },
-                      { key: 'relVolume', label: 'Rel Vol', align: 'right' },
-                      { key: 'marketCap', label: 'Mkt Cap', align: 'right' },
-                      { key: 'pe', label: 'P/E', align: 'right' },
-                      { key: 'eps', label: 'EPS', align: 'right' },
-                      { key: 'divYield', label: 'Div %', align: 'right' },
+                      { key: 'volume', label: 'Volume', align: 'right' },
+                      { key: 'open', label: 'Open', align: 'right' },
+                      { key: 'dayHigh', label: 'High', align: 'right' },
+                      { key: 'dayLow', label: 'Low', align: 'right' },
+                      { key: 'weekHigh52', label: '52W H', align: 'right' },
+                      { key: 'weekLow52', label: '52W L', align: 'right' },
                       { key: 'sector', label: 'Sector', align: 'left' },
-                      { key: 'ratingValue', label: 'Rating', align: 'center' },
                     ].map(function(col) {
                       var isSorted = tvSort.col === col.key;
                       return (
@@ -2075,26 +2074,12 @@ export default function Home() {
                           {isUp ? '+' : ''}{fmtPct(r.changePct)}%
                         </td>
                         <td className="tv-td tv-right tv-mono">{fmtVol(r.volume)}</td>
-                        <td className="tv-td tv-right tv-mono">
-                          <span style={{ color: r.relVolume > 1.5 ? '#4f46e5' : r.relVolume > 1 ? '#16a34a' : 'var(--text-secondary)' }}>
-                            {r.relVolume ? r.relVolume.toFixed(2) + 'x' : '—'}
-                          </span>
-                        </td>
-                        <td className="tv-td tv-right tv-mono">{fmtMcap(r.marketCap)}</td>
-                        <td className="tv-td tv-right tv-mono">{r.pe ? r.pe.toFixed(1) : '—'}</td>
-                        <td className="tv-td tv-right tv-mono">{r.eps ? r.eps.toFixed(1) : '—'}</td>
-                        <td className="tv-td tv-right tv-mono">{r.divYield ? r.divYield.toFixed(2) + '%' : '—'}</td>
+                        <td className="tv-td tv-right tv-mono">{'₹' + fmtMktNum(r.open)}</td>
+                        <td className="tv-td tv-right tv-mono">{'₹' + fmtMktNum(r.dayHigh)}</td>
+                        <td className="tv-td tv-right tv-mono">{'₹' + fmtMktNum(r.dayLow)}</td>
+                        <td className="tv-td tv-right tv-mono">{'₹' + fmtMktNum(r.weekHigh52)}</td>
+                        <td className="tv-td tv-right tv-mono">{'₹' + fmtMktNum(r.weekLow52)}</td>
                         <td className="tv-td" style={{ fontSize: 11, color: 'var(--text-muted)', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.sector}</td>
-                        <td className="tv-td" style={{ textAlign: 'center' }}>
-                          {r.rating && r.rating !== '—' ? (
-                            <span style={{
-                              fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 5,
-                              background: r.rating === 'Strong Buy' || r.rating === 'Buy' ? 'rgba(22,163,74,0.08)' : r.rating === 'Strong Sell' || r.rating === 'Sell' ? 'rgba(220,38,38,0.08)' : 'rgba(217,119,6,0.08)',
-                              color: r.rating === 'Strong Buy' || r.rating === 'Buy' ? '#16a34a' : r.rating === 'Strong Sell' || r.rating === 'Sell' ? '#dc2626' : '#d97706',
-                              whiteSpace: 'nowrap',
-                            }}>{r.rating}</span>
-                          ) : '—'}
-                        </td>
                         <td className="tv-td tv-right">
                           <button className="tv-analyse-btn" onClick={function() { setTab('analyse'); analyse(r.symbol); }}>
                             Analyse
