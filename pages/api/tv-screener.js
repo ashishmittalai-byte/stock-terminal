@@ -1,86 +1,108 @@
-// pages/api/tv-screener.js — Top stocks screener data via Yahoo Finance
-// Returns: price, change%, volume, market cap, P/E, EPS, div yield, sector
+// pages/api/tv-screener.js — Stock screener via TradingView Scanner API
+// Real-time NSE/BSE data, sortable, filterable
 
-var STOCK_LISTS = {
-  nifty50: [
-    'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
-    'HINDUNILVR.NS', 'ITC.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'KOTAKBANK.NS',
-    'LT.NS', 'AXISBANK.NS', 'BAJFINANCE.NS', 'ASIANPAINT.NS', 'MARUTI.NS',
-    'TATAMOTORS.NS', 'SUNPHARMA.NS', 'TITAN.NS', 'WIPRO.NS', 'ULTRACEMCO.NS',
-  ],
-  banknifty: [
-    'HDFCBANK.NS', 'ICICIBANK.NS', 'SBIN.NS', 'KOTAKBANK.NS', 'AXISBANK.NS',
-    'INDUSINDBK.NS', 'BANKBARODA.NS', 'PNB.NS', 'FEDERALBNK.NS', 'IDFCFIRSTB.NS',
-    'AUBANK.NS', 'BANDHANBNK.NS',
-  ],
-  niftyit: [
-    'TCS.NS', 'INFY.NS', 'WIPRO.NS', 'HCLTECH.NS', 'TECHM.NS',
-    'LTIM.NS', 'MPHASIS.NS', 'PERSISTENT.NS', 'COFORGE.NS', 'LTTS.NS',
-  ],
+var NIFTY50 = [
+  'NSE:RELIANCE','NSE:TCS','NSE:HDFCBANK','NSE:INFY','NSE:ICICIBANK',
+  'NSE:HINDUNILVR','NSE:ITC','NSE:SBIN','NSE:BHARTIARTL','NSE:KOTAKBANK',
+  'NSE:LT','NSE:AXISBANK','NSE:BAJFINANCE','NSE:ASIANPAINT','NSE:MARUTI',
+  'NSE:TATAMOTORS','NSE:SUNPHARMA','NSE:TITAN','NSE:WIPRO','NSE:ULTRACEMCO',
+];
+
+var BANKNIFTY = [
+  'NSE:HDFCBANK','NSE:ICICIBANK','NSE:SBIN','NSE:KOTAKBANK','NSE:AXISBANK',
+  'NSE:INDUSINDBK','NSE:BANKBARODA','NSE:PNB','NSE:FEDERALBNK','NSE:IDFCFIRSTB',
+  'NSE:AUBANK','NSE:BANDHANBNK',
+];
+
+var NIFTYIT = [
+  'NSE:TCS','NSE:INFY','NSE:WIPRO','NSE:HCLTECH','NSE:TECHM',
+  'NSE:LTIM','NSE:MPHASIS','NSE:PERSISTENT','NSE:COFORGE','NSE:LTTS',
+];
+
+var INDEX_MAP = {
+  nifty50: NIFTY50,
+  banknifty: BANKNIFTY,
+  niftyit: NIFTYIT,
 };
 
-var YF_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Accept': 'application/json',
-  'Accept-Language': 'en-US,en;q=0.9',
-  'Referer': 'https://finance.yahoo.com/',
-  'Origin': 'https://finance.yahoo.com',
-};
+var COLUMNS = [
+  'name', 'description', 'close', 'change', 'change_abs',
+  'volume', 'relative_volume_10d_calc', 'market_cap_basic',
+  'price_earnings_ttm', 'earnings_per_share_basic_ttm',
+  'earnings_per_share_forecast_next_fq', 'dividend_yield_recent',
+  'sector', 'high', 'low', 'price_52_week_high', 'price_52_week_low',
+  'open', 'prev_close_price', 'Recommend.All',
+];
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60');
 
   var index = (req.query.index || 'nifty50').toLowerCase();
-  var symbols = STOCK_LISTS[index] || STOCK_LISTS.nifty50;
-  var symbolStr = symbols.join(',');
+  var tickers = INDEX_MAP[index] || NIFTY50;
 
   try {
-    // Try v7 first
-    var url = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + encodeURIComponent(symbolStr);
-    var response = await fetch(url, { headers: YF_HEADERS });
+    var response = await fetch('https://scanner.tradingview.com/india/scan', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+      body: JSON.stringify({
+        symbols: { tickers: tickers },
+        columns: COLUMNS,
+      }),
+    });
 
     if (!response.ok) {
-      // Fallback v6
-      url = 'https://query2.finance.yahoo.com/v6/finance/quote?symbols=' + encodeURIComponent(symbolStr);
-      response = await fetch(url, { headers: YF_HEADERS });
-    }
-
-    if (!response.ok) {
-      throw new Error('Yahoo Finance returned ' + response.status);
+      throw new Error('TradingView returned ' + response.status);
     }
 
     var data = await response.json();
-    var quotes = (data.quoteResponse && data.quoteResponse.result) || [];
+    var rows = (data && data.data) || [];
 
-    var results = quotes.map(function(q) {
-      var avgVol = q.averageDailyVolume3Month || q.averageDailyVolume10Day || 0;
-      var relVol = avgVol > 0 ? (q.regularMarketVolume || 0) / avgVol : 0;
+    var results = rows.map(function(row) {
+      var d = {};
+      for (var i = 0; i < COLUMNS.length; i++) {
+        d[COLUMNS[i]] = row.d[i];
+      }
+
+      var recVal = d['Recommend.All'];
+      var rating = '—';
+      if (recVal != null) {
+        if (recVal >= 0.5) rating = 'Strong Buy';
+        else if (recVal >= 0.1) rating = 'Buy';
+        else if (recVal > -0.1) rating = 'Neutral';
+        else if (recVal > -0.5) rating = 'Sell';
+        else rating = 'Strong Sell';
+      }
+
       return {
-        symbol: (q.symbol || '').replace('.NS', '').replace('.BO', ''),
-        name: q.shortName || q.longName || q.symbol || '',
-        price: q.regularMarketPrice || 0,
-        change: q.regularMarketChange || 0,
-        changePct: q.regularMarketChangePercent || 0,
-        volume: q.regularMarketVolume || 0,
-        relVolume: Math.round(relVol * 100) / 100,
-        marketCap: q.marketCap || 0,
-        pe: q.trailingPE || null,
-        forwardPe: q.forwardPE || null,
-        eps: q.epsTrailingTwelveMonths || null,
-        epsGrowth: q.earningsQuarterlyGrowth || null,
-        divYield: q.dividendYield ? q.dividendYield * 100 : null,
-        sector: q.sector || '—',
-        weekHigh52: q.fiftyTwoWeekHigh || 0,
-        weekLow52: q.fiftyTwoWeekLow || 0,
-        dayHigh: q.regularMarketDayHigh || 0,
-        dayLow: q.regularMarketDayLow || 0,
-        marketState: q.marketState || 'CLOSED',
-        exchange: q.exchange || 'NSE',
+        symbol: d.name || (row.s || '').split(':')[1] || '',
+        name: d.description || d.name || '',
+        price: d.close || 0,
+        change: d.change_abs || 0,
+        changePct: d.change || 0,
+        volume: d.volume || 0,
+        relVolume: d.relative_volume_10d_calc || 0,
+        marketCap: d.market_cap_basic || 0,
+        pe: d.price_earnings_ttm || null,
+        eps: d.earnings_per_share_basic_ttm || null,
+        divYield: d.dividend_yield_recent || null,
+        sector: d.sector || '—',
+        dayHigh: d.high || 0,
+        dayLow: d.low || 0,
+        open: d.open || 0,
+        prevClose: d.prev_close_price || 0,
+        weekHigh52: d.price_52_week_high || 0,
+        weekLow52: d.price_52_week_low || 0,
+        rating: rating,
+        ratingValue: recVal,
+        exchange: (row.s || '').split(':')[0] || 'NSE',
       };
     });
 
-    // Sort by market cap descending by default
+    // Sort by market cap descending
     results.sort(function(a, b) { return b.marketCap - a.marketCap; });
 
     return res.status(200).json({
