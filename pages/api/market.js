@@ -1,7 +1,6 @@
 // pages/api/market.js — Live market data via Yahoo Finance
-// Returns: current quotes for indices + watchlist, plus optional performance data
 
-const DEFAULT_INDICES = [
+var DEFAULT_INDICES = [
   { symbol: '^NSEI', label: 'NIFTY 50', short: 'NIFTY' },
   { symbol: '^NSEBANK', label: 'Bank Nifty', short: 'BANKNIFTY' },
   { symbol: '^BSESN', label: 'Sensex', short: 'SENSEX' },
@@ -9,22 +8,24 @@ const DEFAULT_INDICES = [
   { symbol: '^GSPC', label: 'S&P 500', short: 'SPX' },
 ];
 
-const DEFAULT_STOCKS = [
-  'RELIANCE.NS',
-  'HDFCBANK.NS',
-  'ICICIBANK.NS',
-  'TCS.NS',
-  'INFY.NS',
+var DEFAULT_STOCKS = [
+  'RELIANCE.NS', 'HDFCBANK.NS', 'ICICIBANK.NS', 'TCS.NS', 'INFY.NS',
 ];
+
+var YF_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Accept': 'application/json',
+  'Accept-Language': 'en-US,en;q=0.9',
+};
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 's-maxage=15, stale-while-revalidate=30');
 
-  const { symbols: customSymbols, detail } = req.query;
+  var customSymbols = req.query.symbols;
+  var detail = req.query.detail;
 
   try {
-    // Build symbol list: indices + default/custom stocks
     var indexSymbols = DEFAULT_INDICES.map(function(i) { return i.symbol; });
     var stockSymbols = customSymbols
       ? customSymbols.split(',').map(function(s) { return s.trim(); })
@@ -32,32 +33,32 @@ export default async function handler(req, res) {
     var allSymbols = indexSymbols.concat(stockSymbols);
     var symbolStr = allSymbols.join(',');
 
-    // Fetch quotes from Yahoo Finance v7
-    var quoteUrl = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + encodeURIComponent(symbolStr);
-    var quoteRes = await fetch(quoteUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
-    });
+    var quoteRes = null;
+    var endpoints = [
+      'https://query1.finance.yahoo.com/v7/finance/quote?symbols=',
+      'https://query2.finance.yahoo.com/v7/finance/quote?symbols=',
+      'https://query1.finance.yahoo.com/v6/finance/quote?symbols=',
+    ];
 
-    if (!quoteRes.ok) {
-      // Fallback to v6 if v7 fails
-      quoteUrl = 'https://query2.finance.yahoo.com/v6/finance/quote?symbols=' + encodeURIComponent(symbolStr);
-      quoteRes = await fetch(quoteUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-      });
+    for (var e = 0; e < endpoints.length; e++) {
+      try {
+        quoteRes = await fetch(endpoints[e] + encodeURIComponent(symbolStr), {
+          headers: YF_HEADERS,
+        });
+        if (quoteRes.ok) break;
+        quoteRes = null;
+      } catch (fetchErr) {
+        quoteRes = null;
+      }
     }
 
-    if (!quoteRes.ok) {
-      throw new Error('Yahoo Finance API returned ' + quoteRes.status);
+    if (!quoteRes || !quoteRes.ok) {
+      throw new Error('Yahoo Finance API unavailable');
     }
 
     var quoteData = await quoteRes.json();
-    var results = quoteData.quoteResponse ? quoteData.quoteResponse.result : [];
+    var results = (quoteData.quoteResponse && quoteData.quoteResponse.result) || [];
 
-    // Map to clean format
     var indices = [];
     var stocks = [];
 
@@ -80,7 +81,6 @@ export default async function handler(req, res) {
         currency: q.currency || 'INR',
       };
 
-      // Check if it's an index
       var isIndex = false;
       for (var i = 0; i < DEFAULT_INDICES.length; i++) {
         if (DEFAULT_INDICES[i].symbol === q.symbol) {
@@ -90,34 +90,20 @@ export default async function handler(req, res) {
           break;
         }
       }
-
-      if (isIndex) {
-        indices.push(item);
-      } else {
-        // Clean stock name — remove ".NS" / ".BO"
+      if (isIndex) indices.push(item);
+      else {
         item.short = (q.symbol || '').replace('.NS', '').replace('.BO', '');
         item.label = q.shortName || item.short;
         stocks.push(item);
       }
     });
 
-    // If detail requested, fetch performance (spark) for that symbol
     var performance = null;
     if (detail) {
-      try {
-        performance = await fetchPerformance(detail);
-      } catch (e) {
-        performance = null;
-      }
+      try { performance = await fetchPerformance(detail); } catch (e) { performance = null; }
     }
 
-    return res.status(200).json({
-      indices: indices,
-      stocks: stocks,
-      performance: performance,
-      timestamp: new Date().toISOString(),
-      marketState: indices.length > 0 ? indices[0].marketState : 'UNKNOWN',
-    });
+    return res.status(200).json({ indices: indices, stocks: stocks, performance: performance, timestamp: new Date().toISOString() });
   } catch (err) {
     console.error('Market API error:', err);
     return res.status(500).json({ error: err.message || 'Failed to fetch market data' });
@@ -125,69 +111,32 @@ export default async function handler(req, res) {
 }
 
 async function fetchPerformance(symbol) {
-  // Fetch 1Y daily data to calculate performance periods
-  var chartUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/' +
-    encodeURIComponent(symbol) + '?range=1y&interval=1d';
-
-  var chartRes = await fetch(chartUrl, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-    }
-  });
-
+  var chartUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(symbol) + '?range=1y&interval=1d';
+  var chartRes = await fetch(chartUrl, { headers: YF_HEADERS });
   if (!chartRes.ok) return null;
-
   var chartData = await chartRes.json();
   var result = chartData.chart && chartData.chart.result && chartData.chart.result[0];
   if (!result) return null;
-
-  var closes = result.indicators && result.indicators.quote && result.indicators.quote[0]
-    ? result.indicators.quote[0].close
-    : [];
+  var closes = (result.indicators && result.indicators.quote && result.indicators.quote[0]) ? result.indicators.quote[0].close : [];
   var timestamps = result.timestamp || [];
-
   if (closes.length === 0) return null;
-
   var currentPrice = closes[closes.length - 1];
   var now = Date.now();
-
   function getPriceNDaysAgo(days) {
-    var target = now - (days * 24 * 60 * 60 * 1000);
-    var closest = null;
-    var closestDiff = Infinity;
+    var target = now - (days * 86400000);
+    var closest = null, closestDiff = Infinity;
     for (var i = 0; i < timestamps.length; i++) {
       var diff = Math.abs((timestamps[i] * 1000) - target);
-      if (diff < closestDiff && closes[i] != null) {
-        closestDiff = diff;
-        closest = closes[i];
-      }
+      if (diff < closestDiff && closes[i] != null) { closestDiff = diff; closest = closes[i]; }
     }
     return closest;
   }
-
-  function calcReturn(pastPrice) {
-    if (!pastPrice || pastPrice === 0) return null;
-    return ((currentPrice - pastPrice) / pastPrice * 100);
-  }
-
-  // Get YTD price (Jan 1 of current year)
+  function calcReturn(past) { return (!past || past === 0) ? null : ((currentPrice - past) / past * 100); }
   var jan1 = new Date(new Date().getFullYear(), 0, 1).getTime();
-  var ytdPrice = null;
-  var ytdDiff = Infinity;
+  var ytdPrice = null, ytdDiff = Infinity;
   for (var i = 0; i < timestamps.length; i++) {
     var diff = Math.abs((timestamps[i] * 1000) - jan1);
-    if (diff < ytdDiff && closes[i] != null) {
-      ytdDiff = diff;
-      ytdPrice = closes[i];
-    }
+    if (diff < ytdDiff && closes[i] != null) { ytdDiff = diff; ytdPrice = closes[i]; }
   }
-
-  return {
-    '1W': calcReturn(getPriceNDaysAgo(7)),
-    '1M': calcReturn(getPriceNDaysAgo(30)),
-    '3M': calcReturn(getPriceNDaysAgo(90)),
-    '6M': calcReturn(getPriceNDaysAgo(180)),
-    'YTD': calcReturn(ytdPrice),
-    '1Y': calcReturn(getPriceNDaysAgo(365)),
-  };
+  return { '1W': calcReturn(getPriceNDaysAgo(7)), '1M': calcReturn(getPriceNDaysAgo(30)), '3M': calcReturn(getPriceNDaysAgo(90)), '6M': calcReturn(getPriceNDaysAgo(180)), 'YTD': calcReturn(ytdPrice), '1Y': calcReturn(getPriceNDaysAgo(365)) };
 }
