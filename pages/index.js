@@ -470,6 +470,68 @@ export default function Home() {
   const [mktPerformance, setMktPerformance] = useState(null);
   const marketInterval = useRef(null);
 
+  // ── TradingView screener state ──
+  const [tvData, setTvData] = useState([]);
+  const [tvLoading, setTvLoading] = useState(false);
+  const [tvError, setTvError] = useState('');
+  const [tvIndex, setTvIndex] = useState('nifty50');
+  const [tvSort, setTvSort] = useState({ col: 'marketCap', dir: 'desc' });
+  const [tvFilter, setTvFilter] = useState('all'); // all | gainers | losers
+
+  const fetchTvData = useCallback(function(idx) {
+    var index = idx || tvIndex;
+    setTvLoading(true);
+    setTvError('');
+    fetch('/api/tv-screener?index=' + index)
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.error) { setTvError(d.error); setTvData([]); }
+        else { setTvData(d.results || []); }
+        setTvLoading(false);
+      })
+      .catch(function(e) { setTvError(e.message || 'Failed'); setTvLoading(false); });
+  }, [tvIndex]);
+
+  const sortTvData = function(data) {
+    var sorted = data.slice();
+    sorted.sort(function(a, b) {
+      var aVal = a[tvSort.col]; var bVal = b[tvSort.col];
+      if (aVal == null) aVal = -Infinity; if (bVal == null) bVal = -Infinity;
+      if (typeof aVal === 'string') return tvSort.dir === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      return tvSort.dir === 'asc' ? aVal - bVal : bVal - aVal;
+    });
+    return sorted;
+  };
+
+  const toggleTvSort = function(col) {
+    setTvSort(function(prev) {
+      if (prev.col === col) return { col: col, dir: prev.dir === 'asc' ? 'desc' : 'asc' };
+      return { col: col, dir: 'desc' };
+    });
+  };
+
+  var filteredTvData = tvData.filter(function(r) {
+    if (tvFilter === 'gainers') return r.changePct > 0;
+    if (tvFilter === 'losers') return r.changePct < 0;
+    return true;
+  });
+  filteredTvData = sortTvData(filteredTvData);
+
+  function fmtVol(v) {
+    if (!v) return '—';
+    if (v >= 1e7) return (v / 1e7).toFixed(1) + ' Cr';
+    if (v >= 1e5) return (v / 1e5).toFixed(1) + ' L';
+    if (v >= 1e3) return (v / 1e3).toFixed(1) + ' K';
+    return v.toString();
+  }
+  function fmtMcap(v) {
+    if (!v) return '—';
+    if (v >= 1e12) return '₹' + (v / 1e12).toFixed(1) + ' T';
+    if (v >= 1e9) return '₹' + (v / 1e9).toFixed(0) + ' B';
+    if (v >= 1e7) return '₹' + (v / 1e7).toFixed(0) + ' Cr';
+    return '₹' + v.toLocaleString('en-IN');
+  }
+
   // Detect desktop for default sidebar state
   useEffect(function() {
     if (typeof window !== 'undefined' && window.innerWidth > 1024) {
@@ -1060,6 +1122,63 @@ export default function Home() {
           max-width:1140px; margin:0 auto;
         }
 
+        /* ─── TradingView Screener Table ─── */
+        .tv-filter-bar {
+          display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+          margin-bottom:16px; padding:12px 16px;
+          background:#ffffff; border:1px solid rgba(0,0,0,0.06);
+          border-radius:var(--radius-md);
+        }
+        .tv-filter-group { display:flex; gap:4px; }
+        .tv-filter-chip {
+          padding:6px 14px; border-radius:6px; font-size:12px; font-weight:600;
+          font-family:'DM Sans',sans-serif; border:1px solid rgba(0,0,0,0.08);
+          background:#ffffff; color:var(--text-secondary); cursor:pointer;
+          transition:all 0.15s; white-space:nowrap;
+        }
+        .tv-filter-chip:hover { border-color:var(--accent-blue); color:var(--accent-blue); }
+        .tv-chip-active {
+          background:var(--accent-blue) !important; color:#ffffff !important;
+          border-color:var(--accent-blue) !important;
+        }
+        .tv-table-wrap {
+          overflow-x:auto; border-radius:var(--radius-md);
+          border:1px solid rgba(0,0,0,0.06); background:#ffffff;
+          box-shadow:0 1px 3px rgba(0,0,0,0.04);
+        }
+        .tv-table {
+          width:100%; border-collapse:collapse; font-size:12px;
+          font-family:'DM Sans',sans-serif; min-width:900px;
+        }
+        .tv-th {
+          padding:10px 12px; text-align:left; font-size:11px; font-weight:700;
+          color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em;
+          border-bottom:1px solid rgba(0,0,0,0.08); cursor:pointer;
+          transition:color 0.15s; white-space:nowrap; user-select:none;
+          background:#fafbfc; position:sticky; top:0;
+        }
+        .tv-th:hover { color:var(--text-primary); }
+        .tv-right { text-align:right !important; }
+        .tv-sort-arrow { font-size:10px; color:var(--accent-blue); }
+        .tv-row {
+          transition:background 0.12s; animation:fadeUp 0.3s ease both;
+        }
+        .tv-row:hover { background:rgba(79,70,229,0.03); }
+        .tv-td {
+          padding:10px 12px; border-bottom:1px solid rgba(0,0,0,0.04);
+          font-size:12px; color:var(--text-secondary);
+        }
+        .tv-mono { font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:500; }
+        .tv-up { color:#16a34a !important; font-weight:600 !important; }
+        .tv-down { color:#dc2626 !important; font-weight:600 !important; }
+        .tv-analyse-btn {
+          padding:4px 10px; border-radius:5px; font-size:11px; font-weight:600;
+          font-family:'DM Sans',sans-serif; border:1px solid rgba(79,70,229,0.2);
+          background:rgba(79,70,229,0.04); color:var(--accent-blue);
+          cursor:pointer; transition:all 0.15s; white-space:nowrap;
+        }
+        .tv-analyse-btn:hover { background:var(--accent-blue); color:#ffffff; }
+
         @media (max-width:768px) {
           .results-grid { grid-template-columns:1fr !important; }
           .hero-title { font-size:28px !important; }
@@ -1069,6 +1188,8 @@ export default function Home() {
           .mkt-sidebar.sb-open { width:280px; }
           .sb-content { width:280px; }
           .footer-inner { grid-template-columns:1fr !important; gap:24px !important; }
+          .tv-filter-bar { padding:8px 12px; }
+          .tv-table-wrap { border-radius:8px; }
         }
       `}</style>
 
@@ -1149,10 +1270,11 @@ export default function Home() {
         )}
 
         {/* ── Tab Bar ── */}
-        <div style={{ maxWidth:320, margin:'16px auto' }}>
+        <div style={{ maxWidth:480, margin:'16px auto' }}>
           <div className="tab-bar">
             <button className={'tab-btn' + (tab==='analyse' ? ' active' : '')} onClick={() => setTab('analyse')}>📊 Analyse</button>
             <button className={'tab-btn' + (tab==='screener' ? ' active' : '')} onClick={() => setTab('screener')}>🔍 Screener</button>
+            <button className={'tab-btn' + (tab==='tvscreen' ? ' active' : '')} onClick={() => { setTab('tvscreen'); if (tvData.length === 0 && !tvLoading) fetchTvData(); }}>📋 Stocks</button>
           </div>
         </div>
 
@@ -1821,6 +1943,154 @@ export default function Home() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+        </>)}
+
+        {/* ══════════ TV STOCKS TAB ══════════ */}
+        {tab === 'tvscreen' && (<>
+
+          <div style={{ marginBottom: 20 }}>
+            <h2 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>Stock Screener</h2>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Live market data · Click column headers to sort</p>
+          </div>
+
+          {/* Filter Bar */}
+          <div className="tv-filter-bar">
+            <div className="tv-filter-group">
+              {[
+                { key: 'nifty50', label: 'Nifty 50' },
+                { key: 'banknifty', label: 'Bank Nifty' },
+                { key: 'niftyit', label: 'Nifty IT' },
+              ].map(function(idx) {
+                return (
+                  <button key={idx.key}
+                    className={'tv-filter-chip' + (tvIndex === idx.key ? ' tv-chip-active' : '')}
+                    onClick={function() { setTvIndex(idx.key); fetchTvData(idx.key); }}>
+                    {idx.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="tv-filter-group">
+              {[
+                { key: 'all', label: 'All' },
+                { key: 'gainers', label: '▲ Gainers' },
+                { key: 'losers', label: '▼ Losers' },
+              ].map(function(f) {
+                return (
+                  <button key={f.key}
+                    className={'tv-filter-chip' + (tvFilter === f.key ? ' tv-chip-active' : '')}
+                    onClick={function() { setTvFilter(f.key); }}>
+                    {f.label}
+                  </button>
+                );
+              })}
+            </div>
+            <button className="btn-ghost" style={{ fontSize: 11, padding: '6px 14px' }} onClick={function() { fetchTvData(); }}>
+              🔄 Refresh
+            </button>
+          </div>
+
+          {/* Loading */}
+          {tvLoading && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 0', gap: 16 }}>
+              <div className="loader-ring" />
+              <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>Loading stock data…</span>
+            </div>
+          )}
+
+          {/* Error */}
+          {tvError && (
+            <div style={{ padding: '14px 20px', borderRadius: 12, background: 'rgba(220,38,38,0.05)', border: '1px solid rgba(220,38,38,0.15)', color: '#dc2626', fontSize: 14, textAlign: 'center', marginBottom: 16 }}>
+              {tvError}
+            </div>
+          )}
+
+          {/* Table */}
+          {!tvLoading && filteredTvData.length > 0 && (
+            <div className="tv-table-wrap">
+              <table className="tv-table">
+                <thead>
+                  <tr>
+                    {[
+                      { key: 'symbol', label: 'Symbol', align: 'left' },
+                      { key: 'price', label: 'Price', align: 'right' },
+                      { key: 'changePct', label: 'Chg %', align: 'right' },
+                      { key: 'volume', label: 'Vol', align: 'right' },
+                      { key: 'relVolume', label: 'Rel Vol', align: 'right' },
+                      { key: 'marketCap', label: 'Mkt Cap', align: 'right' },
+                      { key: 'pe', label: 'P/E', align: 'right' },
+                      { key: 'eps', label: 'EPS', align: 'right' },
+                      { key: 'divYield', label: 'Div %', align: 'right' },
+                      { key: 'sector', label: 'Sector', align: 'left' },
+                    ].map(function(col) {
+                      var isSorted = tvSort.col === col.key;
+                      return (
+                        <th key={col.key}
+                          className={'tv-th' + (col.align === 'right' ? ' tv-right' : '')}
+                          onClick={function() { toggleTvSort(col.key); }}>
+                          {col.label}
+                          {isSorted && (
+                            <span className="tv-sort-arrow">{tvSort.dir === 'asc' ? ' ▲' : ' ▼'}</span>
+                          )}
+                        </th>
+                      );
+                    })}
+                    <th className="tv-th tv-right" style={{ width: 60 }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredTvData.map(function(r, i) {
+                    var isUp = r.changePct >= 0;
+                    return (
+                      <tr key={r.symbol} className="tv-row" style={{ animationDelay: (i * 0.02) + 's' }}>
+                        <td className="tv-td">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{r.symbol}</span>
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
+                          </div>
+                        </td>
+                        <td className="tv-td tv-right tv-mono">{'₹' + fmtMktNum(r.price)}</td>
+                        <td className={'tv-td tv-right tv-mono ' + (isUp ? 'tv-up' : 'tv-down')}>
+                          {isUp ? '+' : ''}{fmtPct(r.changePct)}%
+                        </td>
+                        <td className="tv-td tv-right tv-mono">{fmtVol(r.volume)}</td>
+                        <td className="tv-td tv-right tv-mono">
+                          <span style={{ color: r.relVolume > 1.5 ? '#4f46e5' : r.relVolume > 1 ? '#16a34a' : 'var(--text-secondary)' }}>
+                            {r.relVolume ? r.relVolume.toFixed(2) + 'x' : '—'}
+                          </span>
+                        </td>
+                        <td className="tv-td tv-right tv-mono">{fmtMcap(r.marketCap)}</td>
+                        <td className="tv-td tv-right tv-mono">{r.pe ? r.pe.toFixed(1) : '—'}</td>
+                        <td className="tv-td tv-right tv-mono">{r.eps ? r.eps.toFixed(1) : '—'}</td>
+                        <td className="tv-td tv-right tv-mono">{r.divYield ? r.divYield.toFixed(2) + '%' : '—'}</td>
+                        <td className="tv-td" style={{ fontSize: 11, color: 'var(--text-muted)', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.sector}</td>
+                        <td className="tv-td tv-right">
+                          <button className="tv-analyse-btn" onClick={function() { setTab('analyse'); analyse(r.symbol); }}>
+                            Analyse
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {!tvLoading && !tvError && filteredTvData.length === 0 && tvData.length > 0 && (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)', fontSize: 14 }}>
+              No stocks match the current filter
+            </div>
+          )}
+
+          {/* Stats bar */}
+          {!tvLoading && tvData.length > 0 && (
+            <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 10, fontSize: 12, color: 'var(--text-muted)' }}>
+              <span>{filteredTvData.length} of {tvData.length} stocks shown</span>
+              <span>Sorted by {tvSort.col} ({tvSort.dir})</span>
             </div>
           )}
 
