@@ -169,7 +169,19 @@ function TextBlock({ item }) {
 
 // ─── Market Ticker (Top Bar) ───────────────────────────────────
 
-function MarketTicker({ indices, onSelect, selectedSymbol }) {
+function MarketTicker({ indices, onSelect, selectedSymbol, error }) {
+  if (error) {
+    return (
+      <div className="mkt-ticker">
+        <div className="ticker-label">MARKET</div>
+        <div className="ticker-scroll">
+          <div className="ticker-item">
+            <span className="ticker-name" style={{ color: 'var(--text-muted)', fontSize: 11 }}>{error}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (!indices || indices.length === 0) {
     return (
       <div className="mkt-ticker">
@@ -413,14 +425,13 @@ function SiteFooter() {
           <p className="footer-col-title">Resources</p>
           <a href="https://www.nseindia.com" target="_blank" rel="noopener noreferrer" className="footer-link">NSE India ↗</a>
           <a href="https://www.bseindia.com" target="_blank" rel="noopener noreferrer" className="footer-link">BSE India ↗</a>
-          <a href="https://www.tradingview.com" target="_blank" rel="noopener noreferrer" className="footer-link">TradingView ↗</a>
-          <a href="https://www.screener.in" target="_blank" rel="noopener noreferrer" className="footer-link">Screener.in ↗</a>
+          <a href="https://www.moneycontrol.com" target="_blank" rel="noopener noreferrer" className="footer-link">Moneycontrol ↗</a>
         </div>
 
         <div className="footer-col">
           <p className="footer-col-title">Data</p>
           <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-            Market data via Yahoo Finance.
+            Market data via NSE/BSE.
             Analysis by Gemini AI.
             Prices may be delayed.
           </p>
@@ -466,6 +477,7 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [marketIndices, setMarketIndices] = useState([]);
   const [marketStocks, setMarketStocks] = useState([]);
+  const [mktError, setMktError] = useState('');
   const [mktSelected, setMktSelected] = useState(null);
   const [mktPerformance, setMktPerformance] = useState(null);
   const marketInterval = useRef(null);
@@ -544,17 +556,21 @@ export default function Home() {
     var symbolParam = '';
     if (watchlist && watchlist.length > 0) {
       var syms = watchlist.map(function(s) {
-        return s.indexOf('.') === -1 ? s + '.NS' : s;
+        // Convert to TradingView format: NSE:SYMBOL
+        var clean = s.replace('.NS', '').replace('.BO', '');
+        return 'NSE:' + clean;
       });
       symbolParam = '?symbols=' + syms.join(',');
     }
     fetch('/api/market' + symbolParam)
       .then(function(r) { return r.json(); })
       .then(function(d) {
+        if (d.error) { setMktError(d.error); return; }
+        setMktError('');
         if (d.indices) setMarketIndices(d.indices);
         if (d.stocks) setMarketStocks(d.stocks);
       })
-      .catch(function() {});
+      .catch(function(e) { setMktError('Market data unavailable'); });
   }, [watchlist]);
 
   useEffect(function() {
@@ -1148,7 +1164,7 @@ export default function Home() {
         }
         .tv-table {
           width:100%; border-collapse:collapse; font-size:12px;
-          font-family:'DM Sans',sans-serif; min-width:900px;
+          font-family:'DM Sans',sans-serif; min-width:1050px;
         }
         .tv-th {
           padding:10px 12px; text-align:left; font-size:11px; font-weight:700;
@@ -1198,6 +1214,7 @@ export default function Home() {
         indices={marketIndices}
         onSelect={selectMarketItem}
         selectedSymbol={mktSelected ? mktSelected.symbol : ''}
+        error={mktError}
       />
 
       {/* ── Market Sidebar (Right) ── */}
@@ -2025,6 +2042,7 @@ export default function Home() {
                       { key: 'eps', label: 'EPS', align: 'right' },
                       { key: 'divYield', label: 'Div %', align: 'right' },
                       { key: 'sector', label: 'Sector', align: 'left' },
+                      { key: 'ratingValue', label: 'Rating', align: 'center' },
                     ].map(function(col) {
                       var isSorted = tvSort.col === col.key;
                       return (
@@ -2067,6 +2085,16 @@ export default function Home() {
                         <td className="tv-td tv-right tv-mono">{r.eps ? r.eps.toFixed(1) : '—'}</td>
                         <td className="tv-td tv-right tv-mono">{r.divYield ? r.divYield.toFixed(2) + '%' : '—'}</td>
                         <td className="tv-td" style={{ fontSize: 11, color: 'var(--text-muted)', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.sector}</td>
+                        <td className="tv-td" style={{ textAlign: 'center' }}>
+                          {r.rating && r.rating !== '—' ? (
+                            <span style={{
+                              fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 5,
+                              background: r.rating === 'Strong Buy' || r.rating === 'Buy' ? 'rgba(22,163,74,0.08)' : r.rating === 'Strong Sell' || r.rating === 'Sell' ? 'rgba(220,38,38,0.08)' : 'rgba(217,119,6,0.08)',
+                              color: r.rating === 'Strong Buy' || r.rating === 'Buy' ? '#16a34a' : r.rating === 'Strong Sell' || r.rating === 'Sell' ? '#dc2626' : '#d97706',
+                              whiteSpace: 'nowrap',
+                            }}>{r.rating}</span>
+                          ) : '—'}
+                        </td>
                         <td className="tv-td tv-right">
                           <button className="tv-analyse-btn" onClick={function() { setTab('analyse'); analyse(r.symbol); }}>
                             Analyse
