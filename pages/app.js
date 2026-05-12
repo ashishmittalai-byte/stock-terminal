@@ -697,24 +697,62 @@ export default function Home() {
 
   // ─── Screener ───
   const STRATEGIES = [
-    { label: '15-Min Breakout', icon: '⚡', query: 'Indian stocks showing 15-minute timeframe breakout today with volume surge above resistance' },
-    { label: '1-Hour Breakout', icon: '📈', query: 'Indian stocks showing 1-hour timeframe breakout today breaking above key resistance with high volume' },
-    { label: 'Daily Breakout', icon: '🚀', query: 'Indian NSE stocks showing daily chart breakout today breaking above 52-week high or major resistance with strong volume' },
-    { label: 'Weekly Breakout', icon: '🔥', query: 'Indian stocks showing weekly chart breakout above long-term resistance or all-time high' },
-    { label: 'Breakdown Stocks', icon: '📉', query: 'Indian stocks breaking down below key support levels today on daily chart with high volume — bearish breakdown' },
-    { label: 'Bullish Engulfing', icon: '🕯', query: 'Indian stocks showing bullish engulfing candlestick pattern on daily chart today' },
-    { label: 'Morning Star', icon: '⭐', query: 'Indian stocks showing morning star or hammer candlestick reversal pattern on daily chart' },
-    { label: 'Golden Cross', icon: '✨', query: 'Indian stocks where 50-day SMA just crossed above 200-day SMA (golden cross) recently' },
-    { label: 'Death Cross', icon: '💀', query: 'Indian stocks where 50-day SMA just crossed below 200-day SMA (death cross) recently' },
-    { label: 'RSI Oversold', icon: '🔋', query: 'Indian stocks with RSI below 30 on daily chart — oversold stocks showing potential reversal' },
-    { label: 'RSI Overbought', icon: '⚠️', query: 'Indian stocks with RSI above 70 on daily chart — overbought stocks that may correct' },
-    { label: 'MACD Crossover', icon: '🔀', query: 'Indian stocks showing MACD bullish crossover (MACD crossing above signal line) on daily chart today' },
-    { label: 'High Volume Spike', icon: '📊', query: 'Indian stocks showing unusual volume spike today — 3x or more average volume with price movement' },
-    { label: 'Ascending Triangle', icon: '📐', query: 'Indian stocks forming ascending triangle chart pattern on daily or weekly chart near completion' },
-    { label: 'Cup & Handle', icon: '☕', query: 'Indian stocks forming cup and handle pattern on daily or weekly chart — bullish continuation' },
-    { label: 'Head & Shoulders', icon: '👤', query: 'Indian stocks forming head and shoulders or inverse head and shoulders pattern' },
-    { label: 'Flag & Pennant', icon: '🚩', query: 'Indian stocks showing bullish flag or pennant consolidation pattern after a strong move up' },
-    { label: 'Supertrend Buy', icon: '🟢', query: 'Indian stocks that just triggered Supertrend buy signal on daily chart today' },
+    // ── Technical: Breakouts & Breakdowns ──
+    { label: '15-Min Breakout', icon: '⚡', cat: 'technical', query: 'Indian stocks showing 15-minute timeframe breakout today with volume surge above resistance' },
+    { label: '1-Hour Breakout', icon: '📈', cat: 'technical', query: 'Indian stocks showing 1-hour timeframe breakout today breaking above key resistance with high volume' },
+    { label: 'Daily Breakout', icon: '🚀', cat: 'technical', query: 'Indian NSE stocks showing daily chart breakout today breaking above 52-week high or major resistance with strong volume' },
+    { label: 'Weekly Breakout', icon: '🔥', cat: 'technical', query: 'Indian stocks showing weekly chart breakout above long-term resistance or all-time high' },
+    { label: 'Breakdown Stocks', icon: '📉', cat: 'technical', query: 'Indian stocks breaking down below key support levels today on daily chart with high volume — bearish breakdown' },
+    { label: 'Breakout Stocks', icon: '🎯', cat: 'technical', query: 'Indian NSE stocks within 10% of 52-week high, at least 100% above 52-week low, volume above 100000 and price above 10 — Darvas-style breakout scan' },
+    { label: 'New 52W High', icon: '🏔', cat: 'technical', query: 'Indian NSE stocks currently trading at or within 5% of their 52-week high — companies creating new highs' },
+    // ── Technical: Candlestick Patterns ──
+    { label: 'Bullish Engulfing', icon: '🕯', cat: 'technical', query: 'Indian stocks showing bullish engulfing candlestick pattern on daily chart today' },
+    { label: 'Morning Star', icon: '⭐', cat: 'technical', query: 'Indian stocks showing morning star or hammer candlestick reversal pattern on daily chart' },
+    // ── Technical: Moving Averages ──
+    { label: 'Golden Cross', icon: '✨', cat: 'technical', query: 'Indian stocks where 50-day SMA just crossed above 200-day SMA (golden cross) recently' },
+    { label: 'Death Cross', icon: '💀', cat: 'technical', query: 'Indian stocks where 50-day SMA just crossed below 200-day SMA (death cross) recently' },
+    // ── Technical: Indicators ──
+    { label: 'RSI Oversold', icon: '🔋', cat: 'technical', query: 'Indian stocks with RSI below 30 on daily chart — oversold stocks showing potential reversal' },
+    { label: 'RSI Overbought', icon: '⚠️', cat: 'technical', query: 'Indian stocks with RSI above 70 on daily chart — overbought stocks that may correct' },
+    { label: 'MACD Crossover', icon: '🔀', cat: 'technical', query: 'Indian stocks showing MACD bullish crossover (MACD crossing above signal line) on daily chart today' },
+    { label: 'Supertrend Buy', icon: '🟢', cat: 'technical', query: 'Indian stocks that just triggered Supertrend buy signal on daily chart today' },
+    // ── Technical: Volume ──
+    { label: 'High Volume Spike', icon: '📊', cat: 'technical', query: 'Indian stocks showing unusual volume spike today — 3x or more average volume with price movement' },
+    { label: 'Price Volume Action', icon: '📶', cat: 'technical', query: 'Indian NSE stocks where weekly traded volume has increased more than 5x compared to previous week average and price movement is positive — strong price-volume action' },
+    // ── Technical: Chart Patterns ──
+    { label: 'Ascending Triangle', icon: '📐', cat: 'technical', query: 'Indian stocks forming ascending triangle chart pattern on daily or weekly chart near completion' },
+    { label: 'Cup & Handle', icon: '☕', cat: 'technical', query: 'Indian stocks forming cup and handle pattern on daily or weekly chart — bullish continuation' },
+    { label: 'Head & Shoulders', icon: '👤', cat: 'technical', query: 'Indian stocks forming head and shoulders or inverse head and shoulders pattern' },
+    { label: 'Flag & Pennant', icon: '🚩', cat: 'technical', query: 'Indian stocks showing bullish flag or pennant consolidation pattern after a strong move up' },
+    // ── Fundamental: Value Investing ──
+    { label: 'Magic Formula', icon: '🎩', cat: 'fundamental', query: 'Indian NSE stocks that qualify under Joel Greenblatt Magic Formula — high earnings yield (EBIT/EV) and high return on capital (EBIT/net fixed assets + working capital). List top 10-15 stocks ranked by combined Magic Formula score with their PE, ROCE, and earnings yield.' },
+    { label: 'Value Stocks', icon: '💎', cat: 'fundamental', query: 'Indian NSE stocks with high operating profit margin above 15%, ROCE above 15%, low debt-to-equity below 0.5, and reasonable PE below 25 — classic value stocks with strong fundamentals' },
+    { label: 'Graham & Buffett', icon: '📖', cat: 'fundamental', query: 'Indian NSE stocks that pass Benjamin Graham and Warren Buffett filters — sales above 250 crore, PE below 15, PB below 1.5, debt-to-equity below 0.5, ROE above 15%, consistent 5-year profit growth above 10%, and dividend paying. List top stocks with key metrics.' },
+    { label: 'Piotroski Score 9', icon: '🏆', cat: 'fundamental', query: 'Indian NSE stocks with Piotroski F-Score of 8 or 9 — positive net income, positive operating cash flow, improving ROA, cash flow > net income, decreasing leverage, improving current ratio, no new shares issued, improving gross margin, improving asset turnover. List stocks with their Piotroski score breakdown.' },
+    { label: 'Coffee Can Portfolio', icon: '☕', cat: 'fundamental', query: 'Indian NSE stocks suitable for Coffee Can portfolio (Saurabh Mukherjee style) — market cap above 100 crore, revenue growth above 10% CAGR for 10 years, ROCE above 15% every year for past 10 years. These are consistent long-term compounders. List top stocks with 10-year ROCE and revenue growth.' },
+    { label: 'Low Avg Earnings PE', icon: '📉', cat: 'fundamental', query: 'Indian NSE stocks trading at low valuation based on 10-year average earnings — where current price divided by 10-year average EPS is below 10. Benjamin Graham style valuation using normalized earnings. List stocks with current PE, 10-year avg earnings PE, and current price.' },
+    // ── Fundamental: Growth ──
+    { label: 'Growth Stocks', icon: '🌱', cat: 'fundamental', query: 'Indian NSE high-growth stocks at reasonable price (GARP) — quarterly revenue growth above 20%, quarterly profit growth above 25%, ROE above 15%, and PE below 40. Score each stock on growth quality (G-Factor). List top 10-15 stocks with quarterly growth rates, ROE, and PE.' },
+    { label: 'Bull Cartel', icon: '🐂', cat: 'fundamental', query: 'Indian NSE stocks with excellent recent quarterly results — latest quarter sales growth above 15%, profit growth above 20%, and improving operating margins compared to previous quarter. Focus on companies with strong momentum in earnings. List top 15 with quarterly sales growth, profit growth, and OPM.' },
+    { label: 'Quarterly Growers', icon: '📊', cat: 'fundamental', query: 'Indian NSE stocks where quarterly profits have been consecutively growing — Q1 profit > Q2 profit > Q3 profit > Q4 profit (each recent quarter better than the previous). Companies showing consistent sequential improvement. List stocks with last 4 quarters profit figures.' },
+    { label: 'Multibagger Picks', icon: '🚀', cat: 'fundamental', query: 'Indian NSE potential multibagger stocks — small/mid cap (market cap 500-10000 crore), sales growth above 20%, profit growth above 25%, ROE above 18%, low debt-to-equity below 0.5, promoter holding above 50%, and PE below 30. List top 10-15 with all key metrics.' },
+    // ── Fundamental: Dividend & Income ──
+    { label: 'High Dividend Yield', icon: '💰', cat: 'fundamental', query: 'Indian NSE stocks with highest dividend yield — consistently paying dividends for at least 5 years, current dividend yield above 3%, payout ratio sustainable (below 60%), and profitable company. Sort by highest dividend yield. List top 15 with dividend yield, payout ratio, and 5-year dividend history.' },
+    // ── Fundamental: Turnaround & Special ──
+    { label: 'Loss to Profit', icon: '🔄', cat: 'fundamental', query: 'Indian NSE companies that had a turnaround — reporting losses in previous quarters but latest quarter shows profit. Companies transitioning from loss-making to profitable. List stocks with previous quarter loss, latest quarter profit, and what changed.' },
+    { label: 'Debt Reduction', icon: '🏦', cat: 'fundamental', query: 'Indian NSE companies aggressively reducing debt — debt-to-equity ratio decreased significantly over last 2-3 years, while also expanding operations (growing sales). Companies becoming leaner and stronger. List stocks with current D/E, D/E 3 years ago, and sales growth.' },
+    { label: 'Capacity Expansion', icon: '🏗', cat: 'fundamental', query: 'Indian NSE companies undergoing major capacity expansion — fixed assets (including CWIP) have increased more than 50% in last one year, or fixed assets have doubled in last 3 years. Companies investing heavily for future growth. List stocks with fixed asset growth, CWIP, and capex details.' },
+    { label: 'FII Buying', icon: '🌍', cat: 'fundamental', query: 'Indian NSE stocks where FII (Foreign Institutional Investors) shareholding has increased significantly in the latest quarter compared to previous quarter — FII stake increased by at least 1-2%. List top 15 stocks with current FII holding, previous quarter FII holding, and the change.' },
+    // ── Fundamental: Blue Chips & Large Cap ──
+    { label: 'Blue Chip Quality', icon: '🏛', cat: 'fundamental', query: 'Indian NSE blue chip large-cap stocks (market cap above 30000 crore) with solid fundamentals — profit growth above 10% for 5 years, ROE above 15%, low debt, consistent dividend payer, and PE below 30. The bluest of blue chips. List top 15 with market cap, PE, ROE, and 5-year profit CAGR.' },
+    { label: 'High Growth + ROE', icon: '⚡', cat: 'fundamental', query: 'Indian NSE undervalued high-quality stocks — sales growth above 15%, profit growth above 20%, ROE above 20%, and PE below 25. Companies growing fast but still reasonably priced. List top 15 with growth rates, ROE, PE, and PEG ratio.' },
+    { label: 'Top 100 Stocks', icon: '💯', cat: 'fundamental', query: 'List top 100 Indian NSE stocks by market capitalization with current price, market cap, PE ratio, and sector. Include all Nifty 50 and next 50 large cap stocks.' },
+  ];
+
+  // Strategy categories for organized display
+  var STRAT_CATEGORIES = [
+    { key: 'fundamental', label: 'Fundamental Screens', icon: '📋' },
+    { key: 'technical', label: 'Technical Screens', icon: '📈' },
   ];
 
   const runScreener = useCallback(async (strategyText) => {
@@ -1700,19 +1738,30 @@ export default function Home() {
                 </div>
               )}
 
-              <p style={{ fontSize:11, color:'var(--text-muted)', textAlign:'center', marginBottom:14, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.1em' }}>Pre-built Strategies</p>
-              <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:8 }}>
-                {STRATEGIES.map((s, i) => (
-                  <button key={i} className="strat-chip" onClick={() => { setScreenStrategy(s.label); runScreener(s.query); }}>
-                    <span>{s.icon}</span> {s.label}
-                    <span onClick={e => { e.stopPropagation(); toggleSavedStrategy(s.label); }}
-                      style={{ fontSize:12, cursor:'pointer', color: savedStrategies.includes(s.label) ? '#d97706' : 'var(--text-muted)', marginLeft:2 }}
-                      title={savedStrategies.includes(s.label) ? 'Remove from saved' : 'Save strategy'}>
-                      {savedStrategies.includes(s.label) ? '★' : '☆'}
-                    </span>
-                  </button>
-                ))}
-              </div>
+              {STRAT_CATEGORIES.map(function(cat) {
+                var catStrats = STRATEGIES.filter(function(s) { return s.cat === cat.key; });
+                return (
+                  <div key={cat.key} style={{ marginBottom: 20 }}>
+                    <p style={{ fontSize:11, color:'var(--text-muted)', textAlign:'center', marginBottom:10, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.1em' }}>
+                      {cat.icon} {cat.label} ({catStrats.length})
+                    </p>
+                    <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:8 }}>
+                      {catStrats.map(function(s, i) {
+                        return (
+                          <button key={i} className="strat-chip" onClick={function() { setScreenStrategy(s.label); runScreener(s.query); }}>
+                            <span>{s.icon}</span> {s.label}
+                            <span onClick={function(e) { e.stopPropagation(); toggleSavedStrategy(s.label); }}
+                              style={{ fontSize:12, cursor:'pointer', color: savedStrategies.includes(s.label) ? '#d97706' : 'var(--text-muted)', marginLeft:2 }}
+                              title={savedStrategies.includes(s.label) ? 'Remove from saved' : 'Save strategy'}>
+                              {savedStrategies.includes(s.label) ? '★' : '☆'}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
 
